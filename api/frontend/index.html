@@ -2,11 +2,14 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- viewport makes the page scale correctly on mobile/tablet screens -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>DefectGuard UI</title>
+    <!-- Load a plain CSS file (no framework required) -->
     <link rel="stylesheet" href="/ui/static/styles.css" />
   </head>
   <body>
+    <!-- Header area with product name + short explanation -->
     <header class="header">
       <div class="container">
         <div class="brand">DefectGuard</div>
@@ -15,6 +18,7 @@
     </header>
 
     <main class="container">
+      <!-- Control panel: choose image, optional API key, run prediction -->
       <section class="panel">
         <div class="row">
           <label class="label" for="fileInput">Image</label>
@@ -25,6 +29,7 @@
         </div>
         <div class="row small">
           <div class="hint">
+            <!-- Quick links to useful backend endpoints -->
             API:
             <a href="/docs" target="_blank" rel="noreferrer">Swagger</a>
             ·
@@ -36,12 +41,17 @@
         </div>
       </section>
 
+      <!-- Two-column layout:
+           left = image preview with overlay
+           right = raw JSON response from backend -->
       <section class="grid">
         <div class="panel">
           <div class="panelTitle">Preview</div>
           <div class="viewer">
             <div class="viewerInner">
+              <!-- The uploaded image is shown here -->
               <img id="previewImg" class="previewImg" alt="preview" />
+              <!-- Canvas sits above the image so JS can draw detection boxes -->
               <canvas id="overlay" class="overlay"></canvas>
             </div>
           </div>
@@ -49,11 +59,13 @@
 
         <div class="panel">
           <div class="panelTitle">Response</div>
+          <!-- JSON output from /predict goes here -->
           <pre id="jsonOut" class="code"></pre>
         </div>
       </section>
     </main>
 
+    <!-- Load the browser logic after the HTML exists -->
     <script src="/ui/static/app.js"></script>
   </body>
 </html>

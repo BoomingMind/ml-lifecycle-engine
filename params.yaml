@@ -1,6 +1,20 @@
+# `params.yaml` stores training settings outside the Python code.
+#
+# This is useful because you can try a new experiment by editing values here
+# without changing the training script itself.
 train:
+  # Starting model weights.
+  # `yolov8n.pt` is the small YOLO model, good for quick experiments.
   model: yolov8n.pt
+
+  # Path to the dataset description YOLO expects.
   data: data/dataset.yaml
+
+  # How many full passes the model makes over the training data.
   epochs: 10
+
+  # Image size used during training. YOLO will resize images to this shape.
   imgsz: 640
+
+  # Number of images processed together in one training step.
   batch: 16

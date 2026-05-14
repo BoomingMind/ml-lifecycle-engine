@@ -1,5 +1,17 @@
+# This file teaches YOLO where the dataset lives and what classes exist.
+#
+# YOLO reads these values during training and validation.
+
+# Base folder that all relative paths below are built from.
 path: data
+
+# Folder containing training images, relative to `path`.
 train: images/train
+
+# Folder containing validation images, relative to `path`.
 val: images/val
+
+# Class ID to class name mapping.
+# Here we only have one class: anything marked as a defect.
 names:
   0: defect

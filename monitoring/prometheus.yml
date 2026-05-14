@@ -8,10 +8,13 @@
 # - Query example: http_requests_total
 
 global:
+  # How often Prometheus should ask each target for fresh metrics.
   scrape_interval: 15s
 
 scrape_configs:
   - job_name: "api"
+    # Our FastAPI app exposes Prometheus-format metrics at /metrics.
     metrics_path: "/metrics"
     static_configs:
+      # Inside docker-compose network, the API container is reachable by service name "api".
       - targets: ["api:8000"]

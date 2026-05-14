@@ -1,13 +1,21 @@
 # Grafana provisioning for the Prometheus datasource.
 #
+# "Provisioning" means Grafana reads this file during startup and creates
+# the datasource automatically for us.
+#
 # This makes Grafana usable immediately after `docker compose up`,
 # without manually clicking through the UI to add a datasource.
 
 apiVersion: 1
 
 datasources:
+  # We define one datasource named "Prometheus".
   - name: Prometheus
+    # This tells Grafana which backend type to use.
     type: prometheus
+    # `proxy` means browser requests go through Grafana first.
     access: proxy
+    # Inside Docker Compose, the Prometheus container is reachable by service name.
     url: http://prometheus:9090
+    # Make this the default datasource so dashboards use it automatically.
     isDefault: true

@@ -1,4 +1,6 @@
 :root {
+  /* Centralized design variables:
+     change colors/shadows here and the whole UI updates consistently. */
   color-scheme: light;
   --bg: #0b1220;
   --panel: #101a2e;
@@ -11,6 +13,8 @@
 }
 
 * {
+  /* Include padding/border inside width/height calculations.
+     This makes layout sizing much easier to reason about. */
   box-sizing: border-box;
 }
 
@@ -52,6 +56,7 @@ a {
 }
 
 .panel {
+  /* Reusable card component used for uploader, preview, and JSON response panels. */
   border: 1px solid var(--border);
   background: rgba(16, 26, 46, 0.9);
   border-radius: 12px;
@@ -69,6 +74,7 @@ a {
 }
 
 .row {
+  /* Flex row that wraps on smaller screens instead of overflowing. */
   display: flex;
   gap: 10px;
   align-items: center;
@@ -86,6 +92,7 @@ a {
 }
 
 .file {
+  /* File input grows to fill extra space. */
   flex: 1;
   min-width: 240px;
   padding: 10px 12px;
@@ -96,6 +103,7 @@ a {
 }
 
 .text {
+  /* Password field for optional API key. */
   width: 220px;
   padding: 10px 12px;
   border-radius: 10px;
@@ -130,6 +138,7 @@ a {
 }
 
 .grid {
+  /* Main content layout: preview wider than JSON response on large screens. */
   display: grid;
   grid-template-columns: 1.4fr 1fr;
   gap: 12px;
@@ -138,6 +147,7 @@ a {
 
 @media (max-width: 980px) {
   .grid {
+    /* On narrow screens, stack panels vertically for readability. */
     grid-template-columns: 1fr;
   }
 }
@@ -148,6 +158,7 @@ a {
 }
 
 .viewerInner {
+  /* relative positioning lets the overlay canvas sit on top of the image. */
   position: relative;
   width: 100%;
   border-radius: 10px;
@@ -163,6 +174,7 @@ a {
 }
 
 .overlay {
+  /* Absolute positioning makes the canvas cover the same area as the image. */
   position: absolute;
   inset: 0;
   width: 100%;
@@ -171,6 +183,7 @@ a {
 }
 
 .code {
+  /* Monospace panel used for showing raw JSON from the backend. */
   margin: 0;
   white-space: pre-wrap;
   word-break: break-word;

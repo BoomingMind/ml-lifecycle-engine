@@ -1,9 +1,18 @@
+# Core web API framework.
 fastapi==0.115.12
+# ASGI server that actually runs the FastAPI app.
 uvicorn[standard]==0.34.2
+# Lets FastAPI receive uploaded files from browser forms.
 python-multipart==0.0.20
+# Opens image files for inference.
 pillow==11.2.1
+# Handles image arrays and numeric operations.
 numpy==2.2.6
+# Used for table-like data handling, especially with MLflow pyfunc inputs.
 pandas==2.2.3
+# Exposes Prometheus metrics for monitoring.
 prometheus-client==0.21.1
+# Experiment tracking, model packaging, and registry support.
 mlflow==2.22.1
+# YOLOv8 training and inference library.
 ultralytics==8.3.157

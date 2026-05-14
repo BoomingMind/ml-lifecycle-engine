@@ -1,10 +1,15 @@
 [tool.ruff]
+# Maximum allowed line length for formatting/linting checks.
 line-length = 120
+# Tell Ruff which Python syntax version to expect.
 target-version = "py311"
 
 [tool.ruff.lint]
+# Enable common error, import, and modernization rule groups.
 select = ["E", "F", "I", "UP"]
 
 [tool.pytest.ini_options]
+# `-q` keeps test output compact and easier to scan in CI logs.
 addopts = "-q"
+# Pytest should look for tests in the `tests/` folder.
 testpaths = ["tests"]

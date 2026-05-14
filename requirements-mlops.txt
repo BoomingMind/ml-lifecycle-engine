@@ -1,6 +1,12 @@
+# Tracks datasets and pipeline stages.
 dvc==3.59.2
+# Validates data quality rules before training.
 great-expectations==0.18.21
+# Orchestrates repeatable workflow runs.
 prefect==2.20.13
+# Builds drift and monitoring reports.
 evidently==0.4.40
+# Helps some data tools read and write columnar data efficiently.
 pyarrow==17.0.0
+# Reads YAML config files such as training settings.
 pyyaml==6.0.2

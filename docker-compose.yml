@@ -1,24 +1,33 @@
 services:
   mlflow:
+    # MLflow tracking server:
+    # - stores experiment runs
+    # - stores logged artifacts/model metadata
     build:
       context: .
       dockerfile: docker/Dockerfile.mlflow
     ports:
+      # Host:Container
       - "5000:5000"
     volumes:
+      # Persist MLflow database/artifacts across restarts.
       - mlflow:/mlflow
+    # Automatically restart unless explicitly stopped by an operator.
     restart: unless-stopped
     healthcheck:
+      # Healthcheck lets Docker know if the service is actually responding.
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/').read()"]
       interval: 10s
       timeout: 3s
       retries: 10
 
   api:
+    # FastAPI inference service.
     build:
       context: .
       dockerfile: docker/Dockerfile.api
     environment:
+      # API uses MLflow for model loading/registration and local data volume for logs.
       MLFLOW_TRACKING_URI: http://mlflow:5000
       MLFLOW_MODEL_URI: ${MLFLOW_MODEL_URI:-}
       MODEL_PATH: ${MODEL_PATH:-}
@@ -29,6 +38,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
+      # Mount local data folder so predictions/reference files are accessible on the host.
       - ./data:/app/data
     depends_on:
       - mlflow
@@ -40,16 +50,19 @@ services:
       retries: 10
 
   nginx:
+    # Public entrypoint / reverse proxy in front of the API.
     image: nginx:1.27-alpine
     ports:
       - "8080:80"
     volumes:
+      # Inject our custom proxy config.
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - api
     restart: unless-stopped
 
   prometheus:
+    # Metrics collector. Periodically scrapes /metrics from the API.
     image: prom/prometheus:v2.55.1
     ports:
       - "9090:9090"
@@ -61,13 +74,16 @@ services:
     restart: unless-stopped
 
   grafana:
+    # Dashboard UI on top of Prometheus metrics.
     image: grafana/grafana:11.5.2
     ports:
       - "3000:3000"
     environment:
+      # Default local login for development.
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin
     volumes:
+      # Persist dashboards/settings and auto-provision datasource config.
       - grafana:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
     depends_on:
@@ -75,6 +91,7 @@ services:
     restart: unless-stopped
 
 volumes:
+  # Named volumes survive container recreation.
   mlflow: {}
   prometheus: {}
   grafana: {}

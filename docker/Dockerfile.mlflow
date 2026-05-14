@@ -1,9 +1,14 @@
+# Separate image for the MLflow tracking server.
 FROM python:3.11-slim
 
+# Store MLflow files in this working directory.
 WORKDIR /mlflow
 
+# Install MLflow only; this container has one focused job.
 RUN pip install --no-cache-dir mlflow==2.22.1
 
+# MLflow serves its web UI and API on port 5000.
 EXPOSE 5000
 
+# Start the MLflow tracking server and keep artifacts under `/mlflow/artifacts`.
 CMD ["mlflow", "server", "--host", "0.0.0.0", "--port", "5000", "--backend-store-uri", "sqlite:////mlflow/mlflow.db", "--default-artifact-root", "/mlflow/artifacts"]

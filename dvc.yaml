@@ -1,26 +1,55 @@
+# `dvc.yaml` tells DVC how to rebuild the project step by step.
+#
+# You can think of each stage like one station in a factory line:
+# 1. Download raw data
+# 2. Validate that the data looks correct
+# 3. Train a model from that data
+#
+# DVC watches the listed dependencies (`deps`) and parameters (`params`).
+# If one of them changes, DVC knows which stages need to run again.
 stages:
+  # Stage 1: fetch the source dataset and place it in `data/raw/...`.
   download_mvtec_ad:
+    # This command is what DVC will execute for this stage.
     cmd: python3 scripts/download_mvtec_ad.py --out data/raw/mvtec_ad
     deps:
+      # If this script changes, DVC knows the stage should be rerun.
       - scripts/download_mvtec_ad.py
     outs:
+      # This folder is the stage output produced by the command above.
       - data/raw/mvtec_ad
+
+  # Stage 2: run validation checks before training.
   validate:
+    # `PYTHONPATH=src` lets the script import our project package from `src/`.
     cmd: PYTHONPATH=src python3 scripts/validate_data.py --manifest data/manifest.csv
     deps:
+      # The validation logic itself.
       - scripts/validate_data.py
+      # The manifest file the validation script reads.
       - data/manifest.csv
     outs:
+      # This marker file is created only when validation succeeds.
       - reports/validation.ok
+    # Validation should run every time so we always re-check current files.
     always_changed: true
+
+  # Stage 3: train the defect detection model.
   train:
+    # Training also needs `PYTHONPATH=src` so project modules can be imported.
     cmd: PYTHONPATH=src python3 scripts/train.py --params params.yaml
     deps:
+      # Main training entrypoint.
       - scripts/train.py
+      # Custom MLflow model packaging code used during training/logging.
       - src/defect_detection/mlflow_models.py
+      # Human-editable training settings.
       - params.yaml
+      # YOLO dataset description file.
       - data/dataset.yaml
     outs:
+      # YOLO training writes artifacts such as weights and logs under `runs/`.
       - runs
     params:
+      # DVC tracks only the `train:` section from `params.yaml` for this stage.
       - train

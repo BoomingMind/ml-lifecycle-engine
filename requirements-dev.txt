@@ -1,3 +1,6 @@
+# Test runner for automated checks.
 pytest==8.4.0
+# HTTP client used in API tests.
 httpx==0.28.1
+# Fast linter for style, imports, and common mistakes.
 ruff==0.12.0
