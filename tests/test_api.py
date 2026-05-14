@@ -29,6 +29,17 @@ def test_health_endpoint() -> None:
         assert resp.status_code == 200
         assert resp.json()["status"] == "ok"
 
+
+def test_ready_endpoint() -> None:
+    os.environ.setdefault("DISABLE_MODEL_LOAD", "1")
+    from api.main import app
+
+    with TestClient(app) as client:
+        resp = client.get("/ready")
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "ready"
+
+
 def test_ui_root_serves_html() -> None:
     os.environ.setdefault("DISABLE_MODEL_LOAD", "1")
     from api.main import app
@@ -57,3 +68,24 @@ def test_predict_endpoint_returns_schema() -> None:
         assert "scores" in payload
         assert "class_ids" in payload
         assert "class_names" in payload
+
+
+def test_api_key_auth_for_predict() -> None:
+    os.environ.setdefault("DISABLE_MODEL_LOAD", "1")
+    os.environ["API_KEY"] = "secret"
+    try:
+        from api.main import app
+
+        with TestClient(app) as client:
+            image_bytes = _make_test_image_bytes()
+            resp = client.post("/predict", files={"file": ("image.png", image_bytes, "image/png")})
+            assert resp.status_code == 401
+
+            resp = client.post(
+                "/predict",
+                files={"file": ("image.png", image_bytes, "image/png")},
+                headers={"X-API-Key": "secret"},
+            )
+            assert resp.status_code == 200
+    finally:
+        del os.environ["API_KEY"]
