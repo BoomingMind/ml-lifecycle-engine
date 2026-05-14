@@ -2587,7 +2587,749 @@ To mentally simulate `scripts/train.py`, remember this chain:
 
 That is the full offline lifecycle of the model in this repository.
 
-## 55. Final Summary
+## 55. Deep Dive: Frontend And Deployment Flow
+
+The earlier sections explained what the frontend and deployment files do.
+
+This appendix explains how to mentally follow them as working systems.
+
+These files matter because they answer two practical questions:
+
+- how does a human actually use the model from a browser?
+- how do all services run together as one local platform?
+
+## 55.1 Deep Dive: Frontend User Flow
+
+The frontend is intentionally simple.
+
+That simplicity is a strength.
+
+It lets a beginner understand the entire browser interaction without learning a large framework such as React, Vue, or Angular first.
+
+The frontend is made from three files:
+
+- `api/frontend/index.html`
+- `api/frontend/styles.css`
+- `api/frontend/app.js`
+
+Each file has one main responsibility:
+
+- HTML defines structure
+- CSS defines appearance
+- JavaScript defines behavior
+
+### Part 1: `index.html`
+
+`index.html` is the skeleton of the page.
+
+If you imagine the page as a building:
+
+- HTML creates the rooms
+- CSS paints and sizes the rooms
+- JavaScript makes the doors, buttons, and screens respond
+
+The key sections in `index.html` are:
+
+- header area
+- control panel
+- preview panel
+- response panel
+
+#### Header Area
+
+The header tells the user what the product is.
+
+It shows:
+
+- product name
+- short explanation
+
+Why this matters:
+
+- a UI should immediately communicate purpose
+
+#### Control Panel
+
+This section contains:
+
+- image file input
+- optional API key input
+- Predict button
+
+This is the part of the UI where the user gives instructions to the system.
+
+#### Utility Links
+
+The page also includes links to:
+
+- Swagger docs
+- `/metrics`
+- `/health`
+
+Why include these links?
+
+Because this is not only a customer-facing UI.
+
+It is also a developer and demo UI.
+
+That means it should help someone inspect the backend quickly.
+
+#### Preview Panel
+
+This panel contains:
+
+- the preview image element
+- the overlay canvas
+
+Why use both?
+
+Because the uploaded photo and the detection boxes are different things:
+
+- the image element displays the actual uploaded image
+- the canvas draws graphics on top of it
+
+That separation makes box drawing easier.
+
+#### Response Panel
+
+This panel shows raw JSON from the backend.
+
+Why show the raw JSON?
+
+- transparency for debugging
+- useful for learning what the API returns
+- helpful for developers integrating the service
+
+### Part 2: `styles.css`
+
+CSS is sometimes underestimated, but in a product demo it matters a lot.
+
+Why?
+
+Because layout clarity changes how understandable the system feels.
+
+This file is organized around reusable UI patterns.
+
+#### `:root` Variables
+
+The `:root` section stores color and style variables such as:
+
+- background
+- panel colors
+- border colors
+- accent colors
+- danger colors
+- shadow
+
+Why use variables?
+
+- one place controls the design system
+- future style changes become easier
+
+#### Reusable Card Design
+
+The `.panel` class is reused across multiple sections.
+
+Why that is good design:
+
+- consistent appearance
+- less duplicated CSS
+- easier future maintenance
+
+#### Flex And Grid Layout
+
+The page uses:
+
+- flex rows for controls
+- grid layout for the main two-column body
+
+Why use both?
+
+- flex is good for small aligned rows
+- grid is good for larger page sections
+
+#### Responsive Behavior
+
+The media query changes the layout when the screen becomes narrow.
+
+Why this matters:
+
+- a modern UI should still be readable on smaller screens
+
+#### Overlay Positioning
+
+One of the most important visual details is:
+
+```css
+position: relative;
+```
+
+on the image container and:
+
+```css
+position: absolute;
+inset: 0;
+```
+
+on the canvas overlay.
+
+Why?
+
+Because that makes the canvas cover exactly the same visible area as the image.
+
+Without that, detection boxes would not line up correctly.
+
+### Part 3: `app.js`
+
+This file controls browser behavior.
+
+It is the "brains" of the UI.
+
+The browser loads the page first, then this file connects user actions to API requests and drawing logic.
+
+### Part 4: DOM Element References
+
+At the top of the file, JavaScript reads the main HTML elements:
+
+- file input
+- API key input
+- predict button
+- status element
+- preview image
+- canvas overlay
+- JSON output element
+
+Why gather these once at the top?
+
+- later functions can reuse them
+- repeated DOM lookups are avoided
+- code stays easier to read
+
+### Part 5: API Key Persistence
+
+The constant `API_KEY_STORAGE` defines the localStorage key name.
+
+This is used by:
+
+- `loadApiKey()`
+- `saveApiKey()`
+
+Why localStorage is helpful:
+
+- the user does not need to retype the API key every page refresh
+
+This is a convenience feature, not a high-security secret-management system.
+
+That distinction matters.
+
+For a demo UI, convenience is fine.
+
+For a high-security enterprise product, you would usually use a stronger auth flow.
+
+### Part 6: UI Helper Functions
+
+#### `setStatus(text, kind)`
+
+Purpose:
+
+- show small human-readable status messages
+
+Examples:
+
+- `Idle`
+- `Image selected`
+- `Predicting...`
+- `Done`
+- error states
+
+Why this matters:
+
+- good UX tells the user what the system is doing
+
+#### `pretty(obj)`
+
+Purpose:
+
+- convert JavaScript objects into readable formatted JSON text
+
+Why this matters:
+
+- raw one-line JSON is hard for humans to read
+
+#### `clearOverlay()`
+
+Purpose:
+
+- remove previously drawn detection boxes
+
+Why this matters:
+
+- old boxes should not remain visible when a new image is selected
+
+#### `resizeCanvasToImage()`
+
+Purpose:
+
+- make the overlay canvas match the displayed size of the image
+
+This is one of the most important frontend details.
+
+If the canvas size and image size differ, boxes will appear in the wrong place.
+
+### Part 7: Detection Box Drawing
+
+#### `drawBoxes(payload)`
+
+This is the key visualization function.
+
+Its job is to turn API prediction results into visible rectangles and labels on the image.
+
+Step by step:
+
+1. clear old drawings
+2. confirm `payload.boxes` exists
+3. get drawing context from the canvas
+4. read the displayed image size
+5. compute scale factors from original image size to displayed size
+6. prepare drawing styles
+7. loop through each predicted box
+8. scale each box coordinate to browser coordinates
+9. draw the translucent rectangle
+10. draw the border
+11. compute label text
+12. measure text width
+13. clamp label position inside the canvas
+14. draw label background
+15. draw label text
+
+Why the scaling logic matters so much:
+
+The backend returns coordinates relative to the original image pixels.
+
+But the browser may display the image:
+
+- smaller than the original
+- larger than the original
+- resized to fit the page width
+
+So the code computes:
+
+- `sx`
+- `sy`
+
+These are the x and y scale factors.
+
+That is how the system keeps boxes aligned visually.
+
+### Part 8: Event-Driven Browser Logic
+
+Browsers are event-driven.
+
+That means code often runs in response to user actions.
+
+This file listens to several events.
+
+#### File Selection Event
+
+When the user selects a file:
+
+1. JavaScript reads the chosen file
+2. updates status
+3. clears old JSON output
+4. clears old boxes
+5. creates a temporary browser preview URL
+6. shows the image immediately
+
+Why preview before prediction?
+
+- immediate feedback improves confidence that the right file was selected
+
+#### API Key Change Events
+
+When the user edits the API key field:
+
+- the latest value is saved to localStorage
+
+Why save on both `change` and `keyup`?
+
+- better chance the latest value is preserved
+
+#### Image Load Event
+
+When the image finishes loading:
+
+- the browser finally knows the displayed size
+- the overlay canvas is resized to match
+
+Why not do this earlier?
+
+Because before image load completes, the browser may not know the final layout size.
+
+#### Window Resize Event
+
+When the browser window changes size:
+
+- the image layout may change
+- the overlay must be resized again
+
+This is another subtle but important detail.
+
+Without it, boxes can become misaligned after resizing the browser window.
+
+### Part 9: Predict Button Flow
+
+The click handler on `predictBtn` is the main frontend workflow.
+
+Step by step:
+
+1. confirm a file exists
+2. disable the button to prevent duplicate clicks
+3. update status to `Predicting...`
+4. build a `FormData` object
+5. attach the selected file
+6. build optional headers
+7. include `X-API-Key` if present
+8. call `fetch("/predict", ...)`
+9. try to parse JSON response
+10. if the response is not OK:
+    - show error status
+    - show error JSON
+    - clear overlay
+11. if successful:
+    - show JSON response
+    - set success status
+    - draw boxes
+12. handle network errors
+13. re-enable the button in `finally`
+
+Why disable the button during the request?
+
+- prevents accidental duplicate requests
+
+Why use `finally`?
+
+- the button must be re-enabled whether the request succeeds or fails
+
+### Part 10: Full Frontend User Journey
+
+To mentally simulate the entire frontend:
+
+1. page loads
+2. saved API key is restored
+3. user selects an image
+4. image preview appears
+5. overlay is sized to match image
+6. user clicks Predict
+7. browser sends multipart request
+8. backend returns JSON
+9. frontend shows JSON
+10. frontend draws boxes
+
+That is the full client-side story of the product.
+
+## 55.2 Deep Dive: `docker-compose.yml` And Local Platform Runtime
+
+`docker-compose.yml` is the file that turns many separate services into one working local platform.
+
+Without it, you would need to start each service manually.
+
+That is possible, but slower, easier to misconfigure, and harder for new teammates.
+
+### Mental Model
+
+Think of Docker Compose as a local operations blueprint.
+
+It answers:
+
+- what services exist?
+- how are they built?
+- which ports are exposed?
+- which environment variables are passed in?
+- which data should persist?
+- which service depends on which other service?
+
+### Part 1: Why Multiple Services Exist
+
+This project is not only one Python app.
+
+It is a small platform made from multiple pieces:
+
+- MLflow tracking server
+- FastAPI inference API
+- Nginx reverse proxy
+- Prometheus metrics collector
+- Grafana dashboard UI
+
+Each service has one focused responsibility.
+
+That is generally better than putting everything into one giant container.
+
+### Part 2: The `mlflow` Service
+
+This service runs MLflow.
+
+Its job is to store:
+
+- experiment runs
+- metrics
+- artifacts
+- model registry information
+
+Important pieces in Compose:
+
+- build from `docker/Dockerfile.mlflow`
+- map port `5000:5000`
+- mount a named volume
+- set restart policy
+- define a healthcheck
+
+Why the port mapping matters:
+
+- `5000:5000` means:
+  - host machine port 5000
+  - container port 5000
+
+So if you open:
+
+```text
+http://127.0.0.1:5000
+```
+
+you reach the MLflow UI running inside the container.
+
+Why the named volume matters:
+
+- MLflow data survives container recreation
+
+Why the healthcheck matters:
+
+- Docker can tell whether the service is really responding
+
+### Part 3: The `api` Service
+
+This service runs the FastAPI backend.
+
+Important pieces:
+
+- build from `docker/Dockerfile.api`
+- environment variables configure model and logging behavior
+- port `8000:8000`
+- bind mount `./data:/app/data`
+- depends on `mlflow`
+- healthcheck on `/health`
+
+Why the `data` mount matters:
+
+The container writes prediction logs to `/app/data/...`.
+
+Because `./data` on the host is mounted there, the files are visible outside the container too.
+
+That makes debugging and monitoring scripts easier.
+
+Why `depends_on` matters:
+
+- it tells Compose the API expects MLflow to be present
+
+It does not guarantee application-level readiness by itself, but it does express startup ordering intent.
+
+Why environment variables matter here:
+
+- the same image can behave differently in different environments without changing code
+
+### Part 4: The `nginx` Service
+
+This service is the public entrypoint of the local stack.
+
+It listens on host port 8080 and forwards traffic to the API container.
+
+Important pieces:
+
+- uses official Nginx image
+- maps `8080:80`
+- mounts custom `nginx.conf`
+- depends on `api`
+
+Why not expose only the API directly?
+
+Because modern production-style systems often place a proxy in front of the app.
+
+That proxy can handle:
+
+- security headers
+- timeouts
+- compression
+- request forwarding
+- future TLS termination
+
+### Part 5: `nginx.conf` In Context
+
+The Compose file mounts:
+
+```text
+./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+```
+
+This means:
+
+- use the repo's custom config
+- mount it read-only into the container
+
+Inside that config:
+
+- gzip is enabled
+- all requests are proxied to `http://api:8000`
+- host and forwarding headers are preserved
+- request IDs are forwarded
+- browser security headers are added
+
+Why request ID forwarding matters:
+
+- the proxy and backend can participate in the same request-tracing story
+
+### Part 6: The `prometheus` Service
+
+This service collects metrics.
+
+Important pieces:
+
+- official Prometheus image
+- port `9090:9090`
+- custom config mounted from `monitoring/prometheus.yml`
+- persistent volume
+- depends on `api`
+
+Prometheus works by scraping.
+
+That means it repeatedly requests the API's `/metrics` endpoint.
+
+Why this matters:
+
+- service metrics become time series data
+- dashboards can then visualize request counts and latencies
+
+### Part 7: The `grafana` Service
+
+This service provides a dashboard UI on top of Prometheus.
+
+Important pieces:
+
+- official Grafana image
+- port `3000:3000`
+- default admin credentials for local use
+- persistent storage volume
+- provisioning mount for datasource config
+
+Why provisioning matters:
+
+- Grafana comes up already connected to Prometheus
+- users do not need to click through manual setup
+
+### Part 8: Named Volumes
+
+At the bottom of the Compose file, named volumes are defined:
+
+- `mlflow`
+- `prometheus`
+- `grafana`
+
+Why use named volumes?
+
+- they survive container recreation
+- they separate runtime data from the container image
+
+That is an important container concept:
+
+- image = packaged application
+- volume = persisted mutable data
+
+### Part 9: Restart Policies
+
+Most services use:
+
+```text
+restart: unless-stopped
+```
+
+Why this is useful:
+
+- containers restart automatically after failure or daemon restart
+- developers do not need to manually relaunch every service in common cases
+
+### Part 10: Healthchecks
+
+Both `mlflow` and `api` define healthchecks.
+
+Healthchecks are important because:
+
+- a started container is not always a healthy application
+
+A process might exist but still be:
+
+- not listening yet
+- hung
+- misconfigured
+
+Healthchecks give Docker more realistic service health information.
+
+### Part 11: Full Compose Startup Story
+
+To mentally simulate `docker compose up --build`:
+
+1. Docker reads `docker-compose.yml`
+2. it builds the custom images
+3. it creates networks and volumes
+4. it starts the `mlflow` container
+5. it starts the `api` container
+6. it starts the `nginx` container
+7. it starts `prometheus`
+8. it starts `grafana`
+9. healthchecks begin polling services
+10. the host machine can now access the stack through mapped ports
+
+That is the local platform boot process.
+
+### Part 12: Full Request Path Through The Compose Stack
+
+If a user opens:
+
+```text
+http://127.0.0.1:8080
+```
+
+the request flow is:
+
+1. browser calls host port 8080
+2. Docker forwards that to Nginx container port 80
+3. Nginx proxies the request to `api:8000`
+4. FastAPI handles the request
+5. the response travels back through Nginx
+6. the browser receives the final page or API response
+
+If Prometheus scrapes metrics:
+
+1. Prometheus container calls the API metrics endpoint
+2. API returns Prometheus-formatted metrics
+3. Prometheus stores them
+4. Grafana reads them from Prometheus
+5. Grafana renders dashboards for humans
+
+That is the monitoring data path.
+
+### Part 13: Why This Compose File Matters For Learning
+
+This file is one of the best teaching files in the repo because it shows that MLOps is not only model code.
+
+It also includes:
+
+- runtime services
+- networking
+- persistence
+- health awareness
+- observability
+
+If someone understands this file, they start thinking like a platform engineer, not only like a model trainer.
+
+## 56. Final Summary
 
 This project is a full machine learning product skeleton for manufacturing defect detection.
 
