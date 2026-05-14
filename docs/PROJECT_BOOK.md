@@ -2,6 +2,8 @@
 
 This document is the "read it like a book" guide to the repository.
 
+If you want a more startup- and stakeholder-oriented explanation of the same system, read `docs/STARTUP_ARCHITECTURE.md`.
+
 It explains:
 
 - what this project does

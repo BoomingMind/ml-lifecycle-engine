@@ -2,6 +2,8 @@
 
 This document explains the project from the MLOps point of view.
 
+If you want the same project explained more like a startup architecture case study for a CTO or hiring manager, read `docs/STARTUP_ARCHITECTURE.md`.
+
 It is written for someone who may be:
 
 - new to MLOps
