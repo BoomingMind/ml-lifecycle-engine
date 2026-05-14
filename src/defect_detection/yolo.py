@@ -52,15 +52,26 @@ class YoloPredictor:
         # We support two serving modes:
         # 1) MLflow mode: load a model by URI from an MLflow tracking/registry backend
         # 2) Weights mode: load a local YOLOv8 .pt file directly
+        #
+        # We store the chosen mode in `self._kind` so predict_image_bytes() can
+        # branch quickly without re-checking input arguments.
         if mlflow_model_uri:
+            # Mode 1: MLflow.
+            # `mlflow_model_uri` can look like:
+            # - runs:/<run_id>/model   (a model logged in a specific MLflow run)
+            # - models:/<name>/<stage> (a model in MLflow Model Registry)
             self._kind = "mlflow"
             # mlflow.pyfunc.load_model returns a "PyFunc" model with a standardized predict() API.
+            # That model usually expects a pandas DataFrame.
             self._model = mlflow.pyfunc.load_model(mlflow_model_uri)
         elif model_path:
+            # Mode 2: Local weights.
+            # model_path points to a YOLOv8 .pt file (for example runs/.../best.pt).
             self._kind = "weights"
             # ultralytics.YOLO loads and runs weights directly (no MLflow involved).
             self._model = YOLO(model_path)
         else:
+            # If neither is provided, we cannot load any model.
             raise ValueError("Either model_path or mlflow_model_uri must be provided")
 
     def predict_image_bytes(self, image_bytes: bytes) -> Prediction:
@@ -74,13 +85,22 @@ class YoloPredictor:
             # MLflow PyFunc models expect tabular inputs (DataFrames). We pass the image
             # as base64 to keep the input JSON-friendly.
             # Step 1: encode bytes -> base64 string (safe to put into JSON/CSV/DataFrame).
+            # base64 is needed because a DataFrame cell cannot store raw bytes reliably for
+            # logging/serialization; base64 turns bytes into a normal string.
             b64 = base64.b64encode(image_bytes).decode("utf-8")
             # Step 2: build a 1-row DataFrame because PyFunc predict() expects tabular input.
+            # The wrapper in defect_detection/mlflow_models.py knows how to read "image_b64".
             df = pd.DataFrame([{"image_b64": b64}])
             # Step 3: call the model. Our wrapper returns list-of-dicts (one dict per input image).
+            # In our project, the PyFunc model returns JSON-friendly dicts, not tensors.
             out = self._model.predict(df)
             # Step 4: normalize output to a plain dict no matter what type MLflow returns.
+            # Some MLflow PyFunc implementations return:
+            # - python list[dict]
+            # - pandas DataFrame
+            # We handle both to keep serving stable.
             record = out[0] if isinstance(out, list) else out.iloc[0].to_dict()
+            # Step 5: convert dict -> Prediction dataclass for a stable internal API.
             return Prediction(
                 boxes=record.get("boxes", []),
                 scores=record.get("scores", []),
@@ -90,12 +110,17 @@ class YoloPredictor:
 
         # For local weights, we decode bytes into an RGB image and run Ultralytics YOLO.
         # Step 1: decode bytes -> PIL image (common image representation in Python).
+        # Image.open reads many formats (jpg/png/etc.). We convert to RGB to avoid
+        # surprises with grayscale/CMYK images.
         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         # Step 2: convert to numpy array because Ultralytics accepts numpy images.
+        # numpy array shape becomes (H, W, 3).
         arr = np.array(image)
         # Step 3: run YOLO prediction. It returns a list of results (one per input image).
+        # verbose=False keeps logs quiet during serving.
         results = self._model.predict(arr, verbose=False)
         # Step 4: convert the rich result object into simple JSON-friendly lists.
+        # Ultralytics returns tensors and objects; we translate to dict of python lists.
         record = self._format_ultralytics(results[0])
         return Prediction(**record)
 
@@ -108,10 +133,14 @@ class YoloPredictor:
         simple JSON-compatible structures.
         """
 
+        # `result` is an Ultralytics Results object.
+        # - result.boxes contains bounding box tensors
+        # - result.names maps class IDs to class labels
         boxes = result.boxes
         names = result.names
 
         if boxes is None or boxes.xyxy is None:
+            # No detections.
             return {"boxes": [], "scores": [], "class_ids": [], "class_names": []}
 
         # boxes.xyxy is a tensor shaped [N, 4] where N = number of detections.
