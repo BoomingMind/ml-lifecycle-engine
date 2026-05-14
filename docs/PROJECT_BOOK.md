@@ -13,6 +13,67 @@ It explains:
 
 The writing style is intentionally beginner-friendly. You do not need strong coding experience to follow the main ideas.
 
+## Table Of Contents
+
+- `1.` What This Project Is
+- `2.` The Problem It Solves
+- `3.` What "End To End" Means Here
+- `4.` The System In One Story
+- `5.` Project Phases
+- `6.` Folder-By-Folder Tour
+- `7.` Important Technical Concepts In Plain Language
+- `8.` How The Main Code Works
+- `9.` `src/defect_detection/config.py`
+- `10.` `src/defect_detection/mlflow_utils.py`
+- `11.` `src/defect_detection/mlflow_models.py`
+- `12.` `src/defect_detection/yolo.py`
+- `13.` `api/main.py`
+- `14.` Frontend Files
+- `15.` Data Scripts
+- `16.` `scripts/download_mvtec_ad.py`
+- `17.` `scripts/validate_data.py`
+- `18.` `scripts/train.py`
+- `19.` Monitoring Scripts
+- `20.` `scripts/set_reference_predictions.py`
+- `21.` `scripts/drift_report.py`
+- `22.` `pipelines/prefect_flow.py`
+- `23.` DVC Files
+- `24.` `dvc.yaml`
+- `25.` `params.yaml`
+- `26.` Docker And Infrastructure Files
+- `27.` `docker/Dockerfile.api`
+- `28.` `docker/Dockerfile.mlflow`
+- `29.` `docker-compose.yml`
+- `30.` `nginx/nginx.conf`
+- `31.` Monitoring Config Files
+- `32.` Tests
+- `33.` CI Pipeline
+- `34.` End-To-End Request Flow
+- `35.` End-To-End Training Flow
+- `36.` End-To-End Monitoring Flow
+- `37.` How To Run The Project
+- `38.` Install Dependencies
+- `39.` Run The API Locally
+- `40.` Run With Docker Compose
+- `41.` Train A Model
+- `42.` Enforce The Quality Gate
+- `43.` Run Data Validation
+- `44.` Download MVTec AD
+- `45.` Create A Reference Baseline
+- `46.` Generate A Drift Report
+- `47.` Run Prefect Flow
+- `48.` Use DVC Stages
+- `49.` Important Environment Variables
+- `50.` What The Project Produces
+- `51.` Why This Project Is Production-Shaped
+- `52.` What This Project Does Not Fully Solve Yet
+- `53.` Best Reading Order For Beginners
+- `54.` Deep Dive Chapters For The Three Most Important Files
+- `55.` Deep Dive: Frontend And Deployment Flow
+- `56.` Deep Dive: Monitoring, Drift, Tests, And CI
+- `57.` How To Study This Repo In 7 Days
+- `58.` Final Summary
+
 ## 1. What This Project Is
 
 This repository is an end-to-end MLOps project for manufacturing defect detection.
@@ -3990,7 +4051,151 @@ If you want one compact operational summary, remember this sequence:
 
 That is the complete reliability story of this repository.
 
-## 57. Final Summary
+## 57. How To Study This Repo In 7 Days
+
+This section is for someone who wants a practical learning plan, not only reference material.
+
+You do not need to understand everything in one sitting.
+
+A better approach is to learn the repository layer by layer.
+
+### Day 1: Understand The Product Story
+
+Read:
+
+- this handbook from section `1` through section `7`
+- [README.md](file:///Users/mdmirajulkarim/Documents/trae_projects/Manufacturing-Defect-Detection-Pipeline/README.md)
+
+Goal:
+
+- understand what the project does
+- understand why manufacturing defect detection is a good MLOps use case
+- understand the major tools in plain language
+
+By the end of Day 1, you should be able to explain the whole project in your own words without looking at code.
+
+### Day 2: Understand The Serving Path
+
+Read:
+
+- [main.py](file:///Users/mdmirajulkarim/Documents/trae_projects/Manufacturing-Defect-Detection-Pipeline/api/main.py)
+- [yolo.py](file:///Users/mdmirajulkarim/Documents/trae_projects/Manufacturing-Defect-Detection-Pipeline/src/defect_detection/yolo.py)
+- handbook section `54.1`
+- handbook section `54.2`
+
+Goal:
+
+- understand how an uploaded image becomes a prediction response
+- understand middleware, auth, startup, and prediction logging
+- understand the abstraction between MLflow serving and direct weights serving
+
+By the end of Day 2, you should be able to trace one `/predict` request from browser to JSON response.
+
+### Day 3: Understand The Training Path
+
+Read:
+
+- [train.py](file:///Users/mdmirajulkarim/Documents/trae_projects/Manufacturing-Defect-Detection-Pipeline/scripts/train.py)
+- [mlflow_models.py](file:///Users/mdmirajulkarim/Documents/trae_projects/Manufacturing-Defect-Detection-Pipeline/src/defect_detection/mlflow_models.py)
+- [mlflow_utils.py](file:///Users/mdmirajulkarim/Documents/trae_projects/Manufacturing-Defect-Detection-Pipeline/src/defect_detection/mlflow_utils.py)
+- handbook section `18`
+- handbook section `54.3`
+
+Goal:
+
+- understand how training starts
+- understand how MLflow logging works in the repo
+- understand quality gates and promotion logic
+
+By the end of Day 3, you should be able to explain how a new model becomes a registered production candidate.
+
+### Day 4: Understand The Data And Pipeline Layer
+
+Read:
+
+- [download_mvtec_ad.py](file:///Users/mdmirajulkarim/Documents/trae_projects/Manufacturing-Defect-Detection-Pipeline/scripts/download_mvtec_ad.py)
+- [validate_data.py](file:///Users/mdmirajulkarim/Documents/trae_projects/Manufacturing-Defect-Detection-Pipeline/scripts/validate_data.py)
+- [dvc.yaml](file:///Users/mdmirajulkarim/Documents/trae_projects/Manufacturing-Defect-Detection-Pipeline/dvc.yaml)
+- [params.yaml](file:///Users/mdmirajulkarim/Documents/trae_projects/Manufacturing-Defect-Detection-Pipeline/params.yaml)
+- [prefect_flow.py](file:///Users/mdmirajulkarim/Documents/trae_projects/Manufacturing-Defect-Detection-Pipeline/pipelines/prefect_flow.py)
+
+Goal:
+
+- understand how data is prepared and validated
+- understand how DVC describes pipeline stages
+- understand how Prefect orchestrates repeatable flows
+
+By the end of Day 4, you should be able to explain the offline workflow from data to trained model.
+
+### Day 5: Understand The Frontend And Deployment Stack
+
+Read:
+
+- [index.html](file:///Users/mdmirajulkarim/Documents/trae_projects/Manufacturing-Defect-Detection-Pipeline/api/frontend/index.html)
+- [styles.css](file:///Users/mdmirajulkarim/Documents/trae_projects/Manufacturing-Defect-Detection-Pipeline/api/frontend/styles.css)
+- [app.js](file:///Users/mdmirajulkarim/Documents/trae_projects/Manufacturing-Defect-Detection-Pipeline/api/frontend/app.js)
+- [docker-compose.yml](file:///Users/mdmirajulkarim/Documents/trae_projects/Manufacturing-Defect-Detection-Pipeline/docker-compose.yml)
+- [nginx.conf](file:///Users/mdmirajulkarim/Documents/trae_projects/Manufacturing-Defect-Detection-Pipeline/nginx/nginx.conf)
+- handbook section `55`
+
+Goal:
+
+- understand how a non-technical user interacts with the system
+- understand how services run together locally
+- understand port mapping, volumes, proxying, and browser overlay drawing
+
+By the end of Day 5, you should be able to explain both the UI path and the Docker Compose runtime path.
+
+### Day 6: Understand Monitoring And Reliability
+
+Read:
+
+- [prometheus.yml](file:///Users/mdmirajulkarim/Documents/trae_projects/Manufacturing-Defect-Detection-Pipeline/monitoring/prometheus.yml)
+- [datasource.yml](file:///Users/mdmirajulkarim/Documents/trae_projects/Manufacturing-Defect-Detection-Pipeline/monitoring/grafana/provisioning/datasources/datasource.yml)
+- [drift_report.py](file:///Users/mdmirajulkarim/Documents/trae_projects/Manufacturing-Defect-Detection-Pipeline/scripts/drift_report.py)
+- [set_reference_predictions.py](file:///Users/mdmirajulkarim/Documents/trae_projects/Manufacturing-Defect-Detection-Pipeline/scripts/set_reference_predictions.py)
+- handbook section `56.1` through `56.7`
+
+Goal:
+
+- understand the difference between service monitoring and model behavior monitoring
+- understand how Prometheus, Grafana, JSONL logs, and Evidently fit together
+
+By the end of Day 6, you should be able to explain how the project observes both system health and model behavior.
+
+### Day 7: Understand Quality Protection
+
+Read:
+
+- [conftest.py](file:///Users/mdmirajulkarim/Documents/trae_projects/Manufacturing-Defect-Detection-Pipeline/tests/conftest.py)
+- [test_api.py](file:///Users/mdmirajulkarim/Documents/trae_projects/Manufacturing-Defect-Detection-Pipeline/tests/test_api.py)
+- [ci.yml](file:///Users/mdmirajulkarim/Documents/trae_projects/Manufacturing-Defect-Detection-Pipeline/.github/workflows/ci.yml)
+- handbook section `56.8` through `56.13`
+
+Goal:
+
+- understand how the repo protects itself against regressions
+- understand why CI and tests matter in MLOps
+- understand how dummy predictor mode makes the tests practical
+
+By the end of Day 7, you should be able to explain how the project checks itself before and after deployment.
+
+### End Of The 7 Days
+
+If you complete the full study plan, you should be able to explain:
+
+- the business purpose of the project
+- the training path
+- the serving path
+- the deployment path
+- the monitoring path
+- the testing and CI path
+
+That means you are not only reading the repo anymore.
+
+You are understanding the system as a whole.
+
+## 58. Final Summary
 
 This project is a full machine learning product skeleton for manufacturing defect detection.
 
