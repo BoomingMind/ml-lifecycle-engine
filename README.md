@@ -268,19 +268,6 @@ During normal usage, the platform creates outputs such as:
 - `reports/drift_report.html`
 - MLflow run and model artifacts
 
-## Limitations And Next Steps
-
-This is a strong production-shaped portfolio project, but a real industrial rollout may also require:
-
-- persistent external databases and object storage
-- role-based access control
-- secret management
-- alerting policies
-- larger-scale dataset pipelines
-- label-aware production monitoring
-- GPU scheduling and infrastructure tuning
-- Kubernetes or infrastructure-as-code deployment layers
-
 ## Usage Notes
 
 If you use the MVTec AD helper flow, make sure dataset usage follows the original dataset license.
