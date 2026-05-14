@@ -9,15 +9,19 @@ from PIL import Image
 
 
 def _make_test_image_bytes() -> bytes:
+    # Create a small deterministic RGB image so tests don't depend on external files.
     arr = np.zeros((64, 64, 3), dtype=np.uint8)
     image = Image.fromarray(arr, mode="RGB")
+    # Save the image to an in-memory buffer (BytesIO) instead of writing to disk.
     buf = io.BytesIO()
     image.save(buf, format="PNG")
     return buf.getvalue()
 
 
 def test_health_endpoint() -> None:
+    # Disable real model loading so CI does not download weights or require MLflow.
     os.environ.setdefault("DISABLE_MODEL_LOAD", "1")
+    # Import the FastAPI app after setting env so startup uses the dummy predictor.
     from api.main import app
 
     with TestClient(app) as client:
@@ -27,14 +31,17 @@ def test_health_endpoint() -> None:
 
 
 def test_predict_endpoint_returns_schema() -> None:
+    # Same testing strategy as above: avoid heavy model loading.
     os.environ.setdefault("DISABLE_MODEL_LOAD", "1")
     from api.main import app
 
     with TestClient(app) as client:
         image_bytes = _make_test_image_bytes()
+        # FastAPI expects file uploads under the "files" parameter (multipart/form-data).
         resp = client.post("/predict", files={"file": ("image.png", image_bytes, "image/png")})
         assert resp.status_code == 200
         payload = resp.json()
+        # Verify output schema is stable (clients rely on these keys).
         assert "ts" in payload
         assert "image_sha256" in payload
         assert "boxes" in payload

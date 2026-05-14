@@ -40,12 +40,14 @@ def _extract_metrics(result: Any) -> EvalMetrics:
     tries a few known locations for mAP metrics and returns None when not found.
     """
 
+    # Default to None so callers can decide what to do if evaluation isn't available.
     map50 = None
     map50_95 = None
 
     # Newer Ultralytics versions typically expose `results_dict`.
     results_dict = getattr(result, "results_dict", None)
     if isinstance(results_dict, dict):
+        # Try multiple key spellings to stay compatible across Ultralytics releases.
         for key in ("metrics/mAP50(B)", "metrics/mAP50", "map50"):
             v = results_dict.get(key)
             if isinstance(v, (int, float)):
@@ -60,6 +62,7 @@ def _extract_metrics(result: Any) -> EvalMetrics:
     # Some versions expose metrics under `box`.
     box = getattr(result, "box", None)
     if box is not None:
+        # Older versions expose metrics under `result.box`.
         v = getattr(box, "map50", None)
         if isinstance(v, (int, float)):
             map50 = float(v)
@@ -78,13 +81,16 @@ def main() -> None:
     parser.add_argument("--enforce-gate", action="store_true")
     args = parser.parse_args()
 
+    # Load weights and run validation against the dataset YAML's val split.
     model = YOLO(args.weights)
     result = model.val(data=args.data, verbose=False)
 
+    # Print metrics so this can be used in shells/CI logs.
     metrics = _extract_metrics(result)
     print(asdict(metrics))
 
     if args.enforce_gate:
+        # Gate behavior: fail the process (non-zero exit) when metric is missing or below threshold.
         if metrics.map50 is None:
             raise SystemExit("Gate enabled but map50 could not be extracted")
         if metrics.map50 < args.min_map50:
@@ -93,4 +99,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

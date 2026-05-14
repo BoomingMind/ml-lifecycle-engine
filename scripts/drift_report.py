@@ -20,14 +20,17 @@ import pandas as pd
 
 def _read_jsonl(path: Path) -> pd.DataFrame:
     """Read a JSONL file (one JSON object per line) into a pandas DataFrame."""
+    # JSONL is ideal for logs: each line is independent and easy to append.
     rows = []
     if not path.exists():
+        # Return empty DataFrame so callers can handle "missing data" cleanly.
         return pd.DataFrame()
     with path.open("r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if not line:
                 continue
+            # Parse JSON from the current line and append to rows.
             rows.append(json.loads(line))
     return pd.DataFrame(rows)
 
@@ -42,10 +45,16 @@ def _explode_predictions(df: pd.DataFrame) -> pd.DataFrame:
 
     if df.empty:
         return df
+    # Work on a copy so we don't mutate the caller's DataFrame.
     df = df.copy()
+    # Convert variable-length arrays into fixed numeric columns:
+    # - number of detections (n_boxes)
+    # - max confidence score in the image (max_score)
+    # - average confidence score (mean_score)
     df["n_boxes"] = df["boxes"].map(lambda v: len(v) if isinstance(v, list) else 0)
     df["max_score"] = df["scores"].map(lambda v: max(v) if isinstance(v, list) and v else 0.0)
     df["mean_score"] = df["scores"].map(lambda v: float(sum(v) / len(v)) if isinstance(v, list) and v else 0.0)
+    # Return only the columns we use for drift detection.
     return df[["ts", "image_sha256", "n_boxes", "max_score", "mean_score"]]
 
 
@@ -57,18 +66,23 @@ def main() -> None:
     parser.add_argument("--out", default="reports/drift_report.html")
     args = parser.parse_args()
 
+    # Read and transform the two datasets: baseline vs current.
     ref_df = _explode_predictions(_read_jsonl(Path(args.reference)))
     cur_df = _explode_predictions(_read_jsonl(Path(args.current)))
 
     if ref_df.empty or cur_df.empty:
+        # Drift needs both distributions. If one is missing, fail fast.
         raise SystemExit("Need both reference and current prediction logs to compute drift")
 
+    # Evidently uses a "Report" composed of metrics/presets. DataDriftPreset compares
+    # distributions column-by-column between reference_data and current_data.
     from evidently.report import Report
     from evidently.metric_preset import DataDriftPreset
 
     report = Report(metrics=[DataDriftPreset()])
     report.run(reference_data=ref_df, current_data=cur_df)
 
+    # Save a shareable HTML report.
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     report.save_html(str(out_path))

@@ -45,7 +45,9 @@ class EvalMetrics:
 
 def _load_yaml(path: str | Path) -> dict:
     """Load a YAML file into a dict."""
+    # Path() allows using the same function for string paths and Path objects.
     p = Path(path)
+    # safe_load prevents executing arbitrary YAML tags.
     return yaml.safe_load(p.read_text()) or {}
 
 
@@ -57,11 +59,13 @@ def _extract_eval_metrics(result: Any) -> EvalMetrics:
     multiple locations and returns None values when metrics are not found.
     """
 
+    # We default to None because evaluation might not be possible (missing labels/val split).
     map50 = None
     map50_95 = None
 
     results_dict = getattr(result, "results_dict", None)
     if isinstance(results_dict, dict):
+        # Try multiple key names to stay compatible across Ultralytics versions.
         for key in ("metrics/mAP50(B)", "metrics/mAP50", "map50"):
             v = results_dict.get(key)
             if isinstance(v, (int, float)):
@@ -75,6 +79,7 @@ def _extract_eval_metrics(result: Any) -> EvalMetrics:
 
     box = getattr(result, "box", None)
     if box is not None:
+        # Some versions store metrics on a `.box` object.
         v = getattr(box, "map50", None)
         if isinstance(v, (int, float)):
             map50 = float(v)
@@ -93,9 +98,12 @@ def _get_production_map50(client: MlflowClient, model_name: str) -> float | None
     without having to query run metrics in a specific experiment.
     """
 
+    # Ask the registry for the most recent Production model version.
     versions = client.get_latest_versions(model_name, stages=["Production"])
     if not versions:
+        # No model in Production yet.
         return None
+    # We store "val_map50" as a model version tag during registration.
     tag = versions[0].tags.get("val_map50")
     try:
         return float(tag) if tag is not None else None
@@ -115,14 +123,19 @@ def main() -> None:
     parser.add_argument("--promote", action="store_true", default=os.getenv("PROMOTE_MODEL", "1") == "1")
     args = parser.parse_args()
 
+    # Load training configuration from YAML so hyperparameters are versioned in Git.
     params = _load_yaml(args.params)
     train_cfg = params.get("train", {})
 
+    # Choose which dataset YAML to use:
+    # - CLI overrides YAML (so you can test quickly without editing files)
     data_yaml = args.data or train_cfg.get("data")
     if not data_yaml:
         raise SystemExit("Missing dataset config. Provide --data or set train.data in params.yaml")
 
+    # Configure MLflow so this run logs to the correct tracking server.
     configure_mlflow(os.getenv("MLFLOW_TRACKING_URI"))
+    # Ensure experiments are grouped under a named experiment.
     mlflow.set_experiment(args.experiment)
 
     with mlflow.start_run() as run:
@@ -139,6 +152,7 @@ def main() -> None:
         )
 
         yolo = YOLO(train_cfg.get("model", "yolov8n.pt"))
+        # Start training. Ultralytics writes training outputs under runs/.
         results = yolo.train(
             data=data_yaml,
             epochs=int(train_cfg.get("epochs", 10)),
@@ -153,6 +167,7 @@ def main() -> None:
             if isinstance(v, (int, float)):
                 mlflow.log_metric(k, float(v))
 
+        # Ultralytics stores outputs (including best.pt) under a run directory.
         save_dir = Path(getattr(results, "save_dir", "runs/detect/train"))
         best_weights = save_dir / "weights" / "best.pt"
         if not best_weights.exists():
@@ -161,8 +176,10 @@ def main() -> None:
         # Evaluate the trained weights. This is the key step that enables gating.
         # If your dataset YAML has a val split with labels, YOLO will compute mAP.
         evaluator = YOLO(str(best_weights))
+        # Run validation to compute metrics like mAP. Requires labels in the dataset.
         val_result = evaluator.val(data=data_yaml, verbose=False)
         val_metrics = _extract_eval_metrics(val_result)
+        # Log evaluation metrics to the MLflow run so you can compare experiments.
         mlflow.log_metrics({k: v for k, v in asdict(val_metrics).items() if isinstance(v, (int, float))})
 
         # Log weights file for debugging/inspection or direct weights-based serving.
@@ -185,6 +202,7 @@ def main() -> None:
         if args.register_name:
             # Register the model so it becomes addressable as models:/name/<stage>.
             client = MlflowClient()
+            # Register the PyFunc model we just logged under this run.
             registered = mlflow.register_model(model_uri=f"runs:/{run.info.run_id}/model", name=args.register_name)
 
             # Store evaluation metrics on the model version for easy retrieval later.
@@ -205,6 +223,10 @@ def main() -> None:
                     raise SystemExit(f"Evaluation gate failed: map50 {val_metrics.map50:.4f} < {args.min_map50:.4f}")
 
             if args.promote:
+                # Champion vs challenger:
+                # - If Production doesn't exist yet -> promote.
+                # - If we cannot compute map50 -> promote (policy choice; you can tighten this).
+                # - Otherwise promote only if challenger map50 is higher than champion map50.
                 prod_map50 = _get_production_map50(client, args.register_name)
                 should_promote = prod_map50 is None or val_metrics.map50 is None or val_metrics.map50 > prod_map50
                 if should_promote:

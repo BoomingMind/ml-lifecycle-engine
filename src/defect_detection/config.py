@@ -35,9 +35,13 @@ def load_api_config() -> ApiConfig:
     ensures the log directory exists before the first request arrives.
     """
 
+    # Read where prediction logs should be stored. Default keeps logs inside the repo.
     prediction_log_path = Path(os.getenv("PREDICTION_LOG_PATH", "data/predictions.jsonl"))
+    # Create the folder early so the API doesn't fail on first request due to missing directory.
     prediction_log_path.parent.mkdir(parents=True, exist_ok=True)
 
+    # Collect all configuration pieces into a single object so the rest of the code
+    # does not have to call os.getenv everywhere.
     return ApiConfig(
         mlflow_tracking_uri=os.getenv("MLFLOW_TRACKING_URI"),
         mlflow_model_uri=os.getenv("MLFLOW_MODEL_URI"),
@@ -48,7 +52,10 @@ def load_api_config() -> ApiConfig:
 
 def load_params(params_path: str | Path = "params.yaml") -> dict:
     """Load params.yaml (returns {} if missing)."""
+    # Convert to Path so we can use path.exists() and read_text() safely.
     path = Path(params_path)
     if not path.exists():
+        # Returning {} lets training scripts use params.get("train", {}) without crashing.
         return {}
+    # yaml.safe_load converts YAML into Python types (dict/list/str/int/float).
     return yaml.safe_load(path.read_text()) or {}
