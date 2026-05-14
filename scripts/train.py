@@ -203,9 +203,18 @@ def main() -> None:
             # Register the model so it becomes addressable as models:/name/<stage>.
             client = MlflowClient()
             # Register the PyFunc model we just logged under this run.
+            # This creates a new "model version" in the MLflow Model Registry.
+            # After this, you will have:
+            # - a model name (args.register_name)
+            # - a version number (registered.version)
+            # - an optional stage assignment (Staging/Production/etc.)
             registered = mlflow.register_model(model_uri=f"runs:/{run.info.run_id}/model", name=args.register_name)
 
             # Store evaluation metrics on the model version for easy retrieval later.
+            # Why store as tags?
+            # - Tags live with the model version in the registry
+            # - They are easy to query later without knowing which experiment/run produced the model
+            # - They work well for simple champion-vs-challenger comparisons
             if val_metrics.map50 is not None:
                 client.set_model_version_tag(args.register_name, registered.version, "val_map50", str(val_metrics.map50))
             if val_metrics.map50_95 is not None:
@@ -217,9 +226,17 @@ def main() -> None:
             # - If enforce-gate is on: fail the run if we cannot compute map50 or it's below threshold.
             # - If promote is off: stop after registering (no stage transition).
             if args.enforce_gate:
+                # Gate enabled means: "do not allow low-quality models to be promoted".
+                # In CI/CD, this would prevent deployment automatically.
                 if val_metrics.map50 is None:
+                    # If we cannot compute map50, we cannot prove quality.
+                    # Common reasons:
+                    # - dataset has no labels
+                    # - data YAML missing a val split
+                    # - evaluation crashed
                     raise SystemExit("Evaluation gate enabled but map50 could not be extracted")
                 if val_metrics.map50 < args.min_map50:
+                    # Failing here causes a non-zero exit, which makes pipelines fail fast.
                     raise SystemExit(f"Evaluation gate failed: map50 {val_metrics.map50:.4f} < {args.min_map50:.4f}")
 
             if args.promote:
@@ -227,9 +244,19 @@ def main() -> None:
                 # - If Production doesn't exist yet -> promote.
                 # - If we cannot compute map50 -> promote (policy choice; you can tighten this).
                 # - Otherwise promote only if challenger map50 is higher than champion map50.
+                #
+                # Terms:
+                # - Champion = current Production model
+                # - Challenger = newly trained and registered model version
                 prod_map50 = _get_production_map50(client, args.register_name)
+                # Decision rule:
+                # - If there is no current Production model: promote the challenger.
+                # - If challenger has no map50: promote anyway (looser policy).
+                # - Else promote only if challenger beats champion on map50.
                 should_promote = prod_map50 is None or val_metrics.map50 is None or val_metrics.map50 > prod_map50
                 if should_promote:
+                    # Transition this version to Production.
+                    # archive_existing_versions=True keeps history but ensures only one active Production model.
                     client.transition_model_version_stage(
                         name=args.register_name,
                         version=registered.version,
