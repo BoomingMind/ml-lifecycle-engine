@@ -11,7 +11,7 @@ It combines model training, experiment tracking, model packaging, API serving, b
 
 ![DefectGuard workflow simulation](docs/assets/defectguard-workflow.gif)
 
-## Executive Summary
+## Summary
 
 - Uses YOLOv8 for visual defect detection on manufacturing-style image data
 - Tracks experiments, artifacts, and model versions with MLflow
@@ -24,7 +24,7 @@ It combines model training, experiment tracking, model packaging, API serving, b
 - Ships with Docker Compose, Nginx, Prometheus, and Grafana for local platform operations
 - Includes automated tests and GitHub Actions CI
 
-## Why This Project Matters
+## Why This system Matters
 
 In real manufacturing environments, visual inspection systems need more than a trained model.
 
@@ -46,23 +46,6 @@ It is a strong portfolio project for roles involving:
 - computer vision platforms
 - production AI systems
 
-## System Scope
-
-This repository covers the following lifecycle:
-
-1. Download or prepare dataset inputs
-2. Validate dataset structure before training
-3. Train YOLOv8 and log experiments to MLflow
-4. Evaluate and optionally gate model promotion
-5. Register models in MLflow Model Registry
-6. Serve predictions through FastAPI
-7. Visualize results in a browser UI
-8. Log predictions to JSONL for monitoring
-9. Generate drift reports from prediction behavior
-10. Run services locally with Docker Compose
-11. Monitor runtime metrics with Prometheus and Grafana
-12. Protect quality with pytest and GitHub Actions CI
-
 ## Architecture
 
 At a high level, the platform is organized into five layers:
@@ -83,13 +66,6 @@ At a high level, the platform is organized into five layers:
 - Optional registry promotion using model version tags
 - Quality gate based on `mAP@0.5`
 - Champion-vs-challenger promotion logic for Production stage decisions
-
-### Serving And Product UX
-
-- FastAPI inference service with `/predict`, `/health`, `/ready`, `/version`, and `/metrics`
-- Optional API key protection using `X-API-Key`
-- Request IDs, structured logging, security headers, CORS, trusted hosts, and gzip support
-- Browser UI for image upload, prediction visualization, and raw JSON inspection
 
 ### Monitoring And Reliability
 
@@ -135,31 +111,8 @@ At a high level, the platform is organized into five layers:
 - Ruff
 - GitHub Actions
 
-## Repository Layout
 
-- `api/`: FastAPI service and frontend UI
-- `src/defect_detection/`: reusable application and model helper modules
-- `scripts/`: training, validation, dataset, and monitoring scripts
-- `pipelines/`: Prefect workflow definitions
-- `monitoring/`: Prometheus and Grafana provisioning config
-- `docker/`: Docker build files
-- `tests/`: automated API test coverage
-- `docs/`: deep documentation and codebase walkthroughs
-- `data/`: dataset config, manifests, and runtime log files
 
-## Documentation Map
-
-For different reading styles:
-
-- [MLOPS_FOR_BEGINNERS.md](docs/MLOPS_FOR_BEGINNERS.md): dedicated beginner guide to MLOps concepts, tools, files, and important functions used in this project
-- [STARTUP_ARCHITECTURE.md](docs/STARTUP_ARCHITECTURE.md): architecture brief written for CTO, hiring manager, and startup-style technical discussions
-- [PROJECT_BOOK.md](docs/PROJECT_BOOK.md): full end-to-end handbook, architecture deep dives, and 7-day study plan
-- [WALKTHROUGH.md](docs/WALKTHROUGH.md): shorter guided codebase tour
-- [README.md](README.md): professional project overview and operational quickstart
-
-The GIF asset in this README is generated from:
-
-- `scripts/generate_demo_gif.py`
 
 ## Getting Started
 
@@ -190,14 +143,6 @@ Open:
 - UI: `http://127.0.0.1:8000/`
 - Swagger docs: `http://127.0.0.1:8000/docs`
 
-Useful checks:
-
-```bash
-curl http://127.0.0.1:8000/health
-curl http://127.0.0.1:8000/ready
-curl http://127.0.0.1:8000/metrics
-curl -X POST "http://127.0.0.1:8000/predict" -F "file=@/path/to/image.jpg"
-```
 
 ## Quickstart: Full Local Platform
 
@@ -319,40 +264,6 @@ Run the default flow entrypoint:
 python3 pipelines/prefect_flow.py
 ```
 
-## Testing And CI
-
-Run local quality checks:
-
-```bash
-ruff check .
-pytest
-```
-
-CI is configured in [ci.yml](.github/workflows/ci.yml) and runs on:
-
-- `push`
-- `pull_request`
-
-The test suite uses `DISABLE_MODEL_LOAD=1` so CI stays fast and does not require real model weights.
-
-## Key Environment Variables
-
-### Serving
-
-- `MODEL_PATH`: local YOLO weights path
-- `MLFLOW_TRACKING_URI`: MLflow tracking backend
-- `MLFLOW_MODEL_URI`: explicit model URI for serving
-- `MLFLOW_MODEL_NAME`: registry model name for stage-based serving
-- `MLFLOW_MODEL_STAGE`: registry stage, default `Production`
-- `PREDICTION_LOG_PATH`: JSONL prediction log output path
-- `API_KEY`: enables `X-API-Key` protection for `/predict` and `/metrics`
-- `MAX_UPLOAD_MB`: upload size limit
-- `LOG_LEVEL`: service logging level
-- `DEBUG`: detailed internal errors when set to `1`
-- `CORS_ORIGINS`: comma-separated CORS origins
-- `ALLOWED_HOSTS`: comma-separated trusted hosts
-- `DISABLE_MODEL_LOAD`: enables dummy predictor mode for tests and CI
-
 ### Training And Gating
 
 - `MLFLOW_EXPERIMENT_NAME`
@@ -366,20 +277,6 @@ The test suite uses `DISABLE_MODEL_LOAD=1` so CI stays fast and does not require
 - `MVTEC_AD_ARCHIVE`
 - `MVTEC_AD_OUT`
 
-## Production-Shaped Design Choices
-
-This repository intentionally includes patterns commonly expected in real ML systems:
-
-- structured JSON logging
-- request tracing with request IDs
-- readiness and health endpoints
-- model registry integration
-- evaluation gates
-- promotion policies
-- reverse proxy entrypoint
-- metrics and dashboards
-- automated tests and CI
-- documented configuration
 
 ## Current Outputs
 
