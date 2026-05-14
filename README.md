@@ -7,7 +7,7 @@ It combines model training, experiment tracking, model packaging, API serving, b
 
 ## Platform Simulation
 
-The animation below shows the real-life workflow DefectGuard is built to support: capture -> validate -> train -> promote -> serve -> inspect -> monitor.
+ capture -> validate -> train -> promote -> serve -> inspect -> monitor.
 
 ![DefectGuard workflow simulation](docs/assets/defectguard-workflow.gif)
 
