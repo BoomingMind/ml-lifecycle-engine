@@ -14,6 +14,7 @@ Responsibilities:
 
 import hashlib
 import json
+import os
 import time
 from datetime import datetime, timezone
 
@@ -41,7 +42,16 @@ def _startup() -> None:
 
     model_uri = resolve_model_uri(cfg.mlflow_model_uri)
     app.state.cfg = cfg
-    app.state.predictor = YoloPredictor(model_path=cfg.model_path, mlflow_model_uri=model_uri)
+    if os.getenv("DISABLE_MODEL_LOAD") == "1":
+        from defect_detection.yolo import Prediction
+
+        class _DummyPredictor:
+            def predict_image_bytes(self, image_bytes: bytes) -> Prediction:
+                return Prediction(boxes=[], scores=[], class_ids=[], class_names=[])
+
+        app.state.predictor = _DummyPredictor()
+    else:
+        app.state.predictor = YoloPredictor(model_path=cfg.model_path, mlflow_model_uri=model_uri)
 
 
 @app.get("/health")
