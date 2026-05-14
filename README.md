@@ -29,6 +29,11 @@ export MODEL_PATH=/absolute/path/to/your/best.pt
 uvicorn api.main:app --reload
 ```
 
+UI (frontend):
+
+- Open: http://127.0.0.1:8000/ (upload image and visualize boxes)
+- API docs: http://127.0.0.1:8000/docs
+
 Health check:
 
 ```bash
@@ -63,8 +68,11 @@ docker compose up --build
 
 Services:
 
-- API: http://127.0.0.1:8000
-- MLflow: http://127.0.0.1:5000
+- Nginx (entrypoint + UI): http://127.0.0.1:8080
+- API (direct): http://127.0.0.1:8000
+- MLflow UI: http://127.0.0.1:5000
+- Prometheus UI: http://127.0.0.1:9090
+- Grafana UI: http://127.0.0.1:3000 (admin/admin)
 
 ## Training
 
@@ -74,6 +82,16 @@ Training needs a YOLO dataset YAML (example placeholder exists at `data/dataset.
 export MLFLOW_TRACKING_URI=http://127.0.0.1:5000
 export MLFLOW_EXPERIMENT_NAME=defect-detection
 export MLFLOW_MODEL_NAME=defect-yolo
+PYTHONPATH=src python3 scripts/train.py --data data/dataset.yaml
+```
+
+Quality gate (production-style):
+
+```bash
+export MLFLOW_MODEL_NAME=defect-yolo
+export ENFORCE_GATE=1
+export MIN_MAP50=0.85
+export PROMOTE_MODEL=1
 PYTHONPATH=src python3 scripts/train.py --data data/dataset.yaml
 ```
 
@@ -93,3 +111,4 @@ API:
 - `MLFLOW_TRACKING_URI`: MLflow tracking server
 - `MLFLOW_MODEL_URI`: model URI for serving (e.g. `models:/defect-yolo/Production`)
 - `PREDICTION_LOG_PATH`: where to write JSONL prediction logs
+- `DISABLE_MODEL_LOAD`: set to `1` to skip loading a real model (used by CI tests)

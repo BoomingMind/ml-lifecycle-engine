@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DefectGuard UI</title>
+    <link rel="stylesheet" href="/ui/static/styles.css" />
+  </head>
+  <body>
+    <header class="header">
+      <div class="container">
+        <div class="brand">DefectGuard</div>
+        <div class="subtitle">Upload an image → get defect boxes from /predict</div>
+      </div>
+    </header>
+
+    <main class="container">
+      <section class="panel">
+        <div class="row">
+          <label class="label" for="fileInput">Image</label>
+          <input id="fileInput" class="file" type="file" accept="image/*" />
+          <button id="predictBtn" class="btn" type="button">Predict</button>
+        </div>
+        <div class="row small">
+          <div class="hint">
+            API:
+            <a href="/docs" target="_blank" rel="noreferrer">Swagger</a>
+            ·
+            <a href="/metrics" target="_blank" rel="noreferrer">/metrics</a>
+            ·
+            <a href="/health" target="_blank" rel="noreferrer">/health</a>
+          </div>
+          <div id="status" class="status">Idle</div>
+        </div>
+      </section>
+
+      <section class="grid">
+        <div class="panel">
+          <div class="panelTitle">Preview</div>
+          <div class="viewer">
+            <div class="viewerInner">
+              <img id="previewImg" class="previewImg" alt="preview" />
+              <canvas id="overlay" class="overlay"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panelTitle">Response</div>
+          <pre id="jsonOut" class="code"></pre>
+        </div>
+      </section>
+    </main>
+
+    <script src="/ui/static/app.js"></script>
+  </body>
+</html>
+

@@ -29,6 +29,15 @@ def test_health_endpoint() -> None:
         assert resp.status_code == 200
         assert resp.json()["status"] == "ok"
 
+def test_ui_root_serves_html() -> None:
+    os.environ.setdefault("DISABLE_MODEL_LOAD", "1")
+    from api.main import app
+
+    with TestClient(app) as client:
+        resp = client.get("/")
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers.get("content-type", "")
+
 
 def test_predict_endpoint_returns_schema() -> None:
     # Same testing strategy as above: avoid heavy model loading.

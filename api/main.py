@@ -17,16 +17,23 @@ import json
 import os
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from fastapi.responses import Response
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
+from starlette.staticfiles import StaticFiles
 
 from defect_detection.config import load_api_config
 from defect_detection.mlflow_utils import configure_mlflow, resolve_model_uri
 from defect_detection.yolo import YoloPredictor
 
 app = FastAPI(title="Manufacturing Defect Detection API")
+
+_FRONTEND_DIR = Path(__file__).resolve().parent / "frontend"
+if _FRONTEND_DIR.exists():
+    app.mount("/ui/static", StaticFiles(directory=str(_FRONTEND_DIR)), name="ui-static")
 
 # Prometheus metrics are process-wide singletons in a typical FastAPI deployment.
 # We create them once at import time so they exist for the lifetime of the process.
@@ -65,11 +72,23 @@ def _startup() -> None:
         # Production mode: load the real predictor once during startup.
         app.state.predictor = YoloPredictor(model_path=cfg.model_path, mlflow_model_uri=model_uri)
 
+@app.get("/")
+def ui() -> Response:
+    index = _FRONTEND_DIR / "index.html"
+    if not index.exists():
+        raise HTTPException(status_code=404, detail="UI not available")
+    return FileResponse(index)
+
+
+@app.get("/ui")
+def ui_alias() -> Response:
+    return ui()
+
+
 
 @app.get("/health")
 def health() -> dict:
     """Basic service health check."""
-    return {"status": "ok"}
 
 
 @app.get("/metrics")
