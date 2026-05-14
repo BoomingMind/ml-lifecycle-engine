@@ -5,6 +5,12 @@ DefectGuard is a computer vision MLOps system for automated manufacturing defect
 It combines model training, experiment tracking, model packaging, API serving, browser-based inspection, monitoring, orchestration, and local deployment into one end-to-end system.
 
 
+## Platform Simulation
+
+The animation below shows the real-life workflow DefectGuard is built to support: capture -> validate -> train -> promote -> serve -> inspect -> monitor.
+
+![DefectGuard workflow simulation](docs/assets/defectguard-workflow.gif)
+
 ## Executive Summary
 
 - Uses YOLOv8 for visual defect detection on manufacturing-style image data
@@ -18,7 +24,7 @@ It combines model training, experiment tracking, model packaging, API serving, b
 - Ships with Docker Compose, Nginx, Prometheus, and Grafana for local platform operations
 - Includes automated tests and GitHub Actions CI
 
-## Why This system Matters
+## Why This Project Matters
 
 In real manufacturing environments, visual inspection systems need more than a trained model.
 
@@ -129,6 +135,31 @@ At a high level, the platform is organized into five layers:
 - Ruff
 - GitHub Actions
 
+## Repository Layout
+
+- `api/`: FastAPI service and frontend UI
+- `src/defect_detection/`: reusable application and model helper modules
+- `scripts/`: training, validation, dataset, and monitoring scripts
+- `pipelines/`: Prefect workflow definitions
+- `monitoring/`: Prometheus and Grafana provisioning config
+- `docker/`: Docker build files
+- `tests/`: automated API test coverage
+- `docs/`: deep documentation and codebase walkthroughs
+- `data/`: dataset config, manifests, and runtime log files
+
+## Documentation Map
+
+For different reading styles:
+
+- [PROJECT_BOOK.md](docs/PROJECT_BOOK.md): full end-to-end handbook, architecture deep dives, and 7-day study plan
+- [WALKTHROUGH.md](docs/WALKTHROUGH.md): shorter guided codebase tour
+- [README.md](README.md): professional project overview and operational quickstart
+
+The GIF asset in this README is generated from:
+
+- `scripts/generate_demo_gif.py`
+
+## Getting Started
 
 ### Prerequisites
 
@@ -333,7 +364,7 @@ The test suite uses `DISABLE_MODEL_LOAD=1` so CI stays fast and does not require
 - `MVTEC_AD_ARCHIVE`
 - `MVTEC_AD_OUT`
 
-## Production-grade Design Choices
+## Production-Shaped Design Choices
 
 This repository intentionally includes patterns commonly expected in real ML systems:
 
@@ -361,7 +392,7 @@ During normal usage, the platform creates outputs such as:
 
 ## Limitations And Next Steps
 
-This is a strong production grade, but a real industrial rollout may also require:
+This is a strong production-shaped portfolio project, but a real industrial rollout may also require:
 
 - persistent external databases and object storage
 - role-based access control
@@ -373,4 +404,5 @@ This is a strong production grade, but a real industrial rollout may also requir
 - Kubernetes or infrastructure-as-code deployment layers
 
 ## Usage Notes
+
 If you use the MVTec AD helper flow, make sure dataset usage follows the original dataset license.
