@@ -1,0 +1,20 @@
+stages:
+  validate:
+    cmd: PYTHONPATH=src python3 scripts/validate_data.py --manifest data/manifest.csv
+    deps:
+      - scripts/validate_data.py
+      - data/manifest.csv
+    outs:
+      - reports/validation.ok
+    always_changed: true
+  train:
+    cmd: PYTHONPATH=src python3 scripts/train.py --params params.yaml
+    deps:
+      - scripts/train.py
+      - src/defect_detection/mlflow_models.py
+      - params.yaml
+      - data/dataset.yaml
+    outs:
+      - runs
+    params:
+      - train

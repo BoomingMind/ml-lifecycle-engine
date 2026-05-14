@@ -1,0 +1,6 @@
+train:
+  model: yolov8n.pt
+  data: data/dataset.yaml
+  epochs: 10
+  imgsz: 640
+  batch: 16
