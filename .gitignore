@@ -2,9 +2,11 @@ __pycache__/
 *.py[cod]
 .DS_Store
 .venv/
+.venv-run/
 venv/
 env/
 .env
+yolov8n.pt
 
 data/predictions.jsonl
 data/reference_predictions.jsonl
