@@ -1,4 +1,4 @@
-# DefectGuard: Manufacturing Defect Detection MLOps Platform
+# DefectGuard 
 
 DefectGuard is a computer vision MLOps system for automated manufacturing defect detection.
 
