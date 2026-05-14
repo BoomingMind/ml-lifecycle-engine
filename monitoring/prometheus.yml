@@ -1,0 +1,17 @@
+# Prometheus scrape configuration.
+#
+# Prometheus pulls metrics from targets on an interval.
+# Our FastAPI service exposes Prometheus-format metrics at GET /metrics.
+#
+# Start with docker-compose, then open:
+# - Prometheus UI: http://localhost:9090
+# - Query example: http_requests_total
+
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: "api"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets: ["api:8000"]

@@ -1,0 +1,13 @@
+# Grafana provisioning for the Prometheus datasource.
+#
+# This makes Grafana usable immediately after `docker compose up`,
+# without manually clicking through the UI to add a datasource.
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
