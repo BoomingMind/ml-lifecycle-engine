@@ -1,0 +1,6 @@
+dvc==3.59.2
+great-expectations==0.18.21
+prefect==2.20.13
+evidently==0.4.40
+pyarrow==17.0.0
+pyyaml==6.0.2
