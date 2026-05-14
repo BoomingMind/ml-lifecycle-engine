@@ -1,10 +1,9 @@
 # DefectGuard: Manufacturing Defect Detection MLOps Platform
 
-DefectGuard is a production-shaped computer vision MLOps project for automated manufacturing defect detection.
+DefectGuard is a computer vision MLOps system for automated manufacturing defect detection.
 
 It combines model training, experiment tracking, model packaging, API serving, browser-based inspection, monitoring, orchestration, and local deployment into one end-to-end system.
 
-This repository is designed to feel like a small startup-grade ML product rather than a single training script.
 
 ## Executive Summary
 
@@ -19,7 +18,7 @@ This repository is designed to feel like a small startup-grade ML product rather
 - Ships with Docker Compose, Nginx, Prometheus, and Grafana for local platform operations
 - Includes automated tests and GitHub Actions CI
 
-## Why This Project Matters
+## Why This system Matters
 
 In real manufacturing environments, visual inspection systems need more than a trained model.
 
@@ -130,27 +129,6 @@ At a high level, the platform is organized into five layers:
 - Ruff
 - GitHub Actions
 
-## Repository Layout
-
-- `api/`: FastAPI service and frontend UI
-- `src/defect_detection/`: reusable application and model helper modules
-- `scripts/`: training, validation, dataset, and monitoring scripts
-- `pipelines/`: Prefect workflow definitions
-- `monitoring/`: Prometheus and Grafana provisioning config
-- `docker/`: Docker build files
-- `tests/`: automated API test coverage
-- `docs/`: deep documentation and codebase walkthroughs
-- `data/`: dataset config, manifests, and runtime log files
-
-## Documentation Map
-
-For different reading styles:
-
-- [PROJECT_BOOK.md](docs/PROJECT_BOOK.md): full end-to-end handbook, architecture deep dives, and 7-day study plan
-- [WALKTHROUGH.md](docs/WALKTHROUGH.md): shorter guided codebase tour
-- [README.md](README.md): professional project overview and operational quickstart
-
-## Getting Started
 
 ### Prerequisites
 
@@ -205,8 +183,6 @@ Service endpoints:
 - Grafana UI: `http://127.0.0.1:3000` using `admin/admin`
 
 ## Dataset Setup
-
-The repository includes helper tooling for MVTec AD local development.
 
 Download and extract the dataset:
 
@@ -357,7 +333,7 @@ The test suite uses `DISABLE_MODEL_LOAD=1` so CI stays fast and does not require
 - `MVTEC_AD_ARCHIVE`
 - `MVTEC_AD_OUT`
 
-## Production-Shaped Design Choices
+## Production-grade Design Choices
 
 This repository intentionally includes patterns commonly expected in real ML systems:
 
@@ -385,7 +361,7 @@ During normal usage, the platform creates outputs such as:
 
 ## Limitations And Next Steps
 
-This is a strong production-shaped portfolio project, but a real industrial rollout may also require:
+This is a strong production grade, but a real industrial rollout may also require:
 
 - persistent external databases and object storage
 - role-based access control
@@ -396,19 +372,5 @@ This is a strong production-shaped portfolio project, but a real industrial roll
 - GPU scheduling and infrastructure tuning
 - Kubernetes or infrastructure-as-code deployment layers
 
-## Recommended Reading Order
-
-If you want the most complete learning path:
-
-1. [README.md](README.md)
-2. [PROJECT_BOOK.md](docs/PROJECT_BOOK.md)
-3. [WALKTHROUGH.md](docs/WALKTHROUGH.md)
-4. [main.py](api/main.py)
-5. [train.py](scripts/train.py)
-6. [yolo.py](src/defect_detection/yolo.py)
-
-## License And Usage Notes
-
-This repository is intended for learning, portfolio, and engineering demonstration purposes.
-
+## Usage Notes
 If you use the MVTec AD helper flow, make sure dataset usage follows the original dataset license.
