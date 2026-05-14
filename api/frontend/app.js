@@ -1,9 +1,12 @@
 const fileInput = document.getElementById("fileInput");
+const apiKeyInput = document.getElementById("apiKeyInput");
 const predictBtn = document.getElementById("predictBtn");
 const statusEl = document.getElementById("status");
 const previewImg = document.getElementById("previewImg");
 const overlay = document.getElementById("overlay");
 const jsonOut = document.getElementById("jsonOut");
+
+const API_KEY_STORAGE = "defectguard_api_key";
 
 function setStatus(text, kind = "info") {
   statusEl.textContent = text;
@@ -73,6 +76,15 @@ function drawBoxes(payload) {
   });
 }
 
+function loadApiKey() {
+  const v = localStorage.getItem(API_KEY_STORAGE);
+  apiKeyInput.value = v ?? "";
+}
+
+function saveApiKey() {
+  localStorage.setItem(API_KEY_STORAGE, apiKeyInput.value ?? "");
+}
+
 fileInput.addEventListener("change", () => {
   const f = fileInput.files?.[0];
   if (!f) return;
@@ -81,6 +93,9 @@ fileInput.addEventListener("change", () => {
   clearOverlay();
   previewImg.src = URL.createObjectURL(f);
 });
+
+apiKeyInput.addEventListener("change", saveApiKey);
+apiKeyInput.addEventListener("keyup", saveApiKey);
 
 previewImg.addEventListener("load", () => {
   resizeCanvasToImage();
@@ -106,7 +121,11 @@ predictBtn.addEventListener("click", async () => {
     const form = new FormData();
     form.append("file", f);
 
-    const resp = await fetch("/predict", { method: "POST", body: form });
+    const headers = {};
+    const apiKey = apiKeyInput.value?.trim();
+    if (apiKey) headers["X-API-Key"] = apiKey;
+
+    const resp = await fetch("/predict", { method: "POST", body: form, headers });
     const body = await resp.json().catch(() => null);
 
     if (!resp.ok) {
@@ -128,3 +147,4 @@ predictBtn.addEventListener("click", async () => {
   }
 });
 
+loadApiKey();

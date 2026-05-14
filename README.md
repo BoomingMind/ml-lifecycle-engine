@@ -40,6 +40,12 @@ Health check:
 curl http://127.0.0.1:8000/health
 ```
 
+Readiness (checks model loaded):
+
+```bash
+curl http://127.0.0.1:8000/ready
+```
+
 Prediction (image upload):
 
 ```bash
@@ -112,3 +118,9 @@ API:
 - `MLFLOW_MODEL_URI`: model URI for serving (e.g. `models:/defect-yolo/Production`)
 - `PREDICTION_LOG_PATH`: where to write JSONL prediction logs
 - `DISABLE_MODEL_LOAD`: set to `1` to skip loading a real model (used by CI tests)
+- `API_KEY`: if set, requires `X-API-Key` header for `/predict` and `/metrics`
+- `MAX_UPLOAD_MB`: max upload size for `/predict` (default: 10)
+- `LOG_LEVEL`: logging level (default: INFO)
+- `DEBUG`: set to `1` to return detailed 500 errors (default: 0)
+- `CORS_ORIGINS`: comma-separated origins for CORS (default: `*`)
+- `ALLOWED_HOSTS`: comma-separated trusted hostnames (default: `*`)
