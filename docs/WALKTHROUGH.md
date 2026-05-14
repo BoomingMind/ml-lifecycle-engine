@@ -2,6 +2,8 @@
 
 This doc explains the repository like you’re new and want to understand "why" each thing exists.
 
+If you want a separate beginner-first MLOps explanation of the tools, files, and important functions used in this repo, read `docs/MLOPS_FOR_BEGINNERS.md`.
+
 If you want the full book-style explanation from Phase 1 foundation through training,
 serving, monitoring, deployment, and operations, read `docs/PROJECT_BOOK.md` first.
 

@@ -151,6 +151,7 @@ At a high level, the platform is organized into five layers:
 
 For different reading styles:
 
+- [MLOPS_FOR_BEGINNERS.md](docs/MLOPS_FOR_BEGINNERS.md): dedicated beginner guide to MLOps concepts, tools, files, and important functions used in this project
 - [PROJECT_BOOK.md](docs/PROJECT_BOOK.md): full end-to-end handbook, architecture deep dives, and 7-day study plan
 - [WALKTHROUGH.md](docs/WALKTHROUGH.md): shorter guided codebase tour
 - [README.md](README.md): professional project overview and operational quickstart
