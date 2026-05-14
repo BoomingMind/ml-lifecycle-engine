@@ -1,6 +1,9 @@
 # Walkthrough: Learn The Codebase By Reading
 
-This doc explains the repository like you’re new and want to understand “why” each thing exists.
+This doc explains the repository like you’re new and want to understand "why" each thing exists.
+
+If you want the full book-style explanation from Phase 1 foundation through training,
+serving, monitoring, deployment, and operations, read `docs/PROJECT_BOOK.md` first.
 
 ## Big Picture
 
@@ -228,4 +231,3 @@ You can choose whether the API loads a model from:
 
 - `MODEL_PATH` (weights on disk)
 - `MLFLOW_MODEL_URI` (registry/run reference)
-

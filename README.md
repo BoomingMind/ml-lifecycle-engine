@@ -10,7 +10,10 @@ This repository is a minimal, production-shaped skeleton for a manufacturing def
 - Run the above as an orchestrated flow (Prefect)
 - Run MLflow + API locally with Docker Compose
 
-If you’re new to these tools, start with: `docs/WALKTHROUGH.md`.
+If you want the full beginner-friendly end-to-end guide, start with:
+
+- `docs/PROJECT_BOOK.md`: long-form handbook from project purpose to deployment and monitoring
+- `docs/WALKTHROUGH.md`: shorter guided tour of the codebase
 
 ## Quickstart (Local)
 
