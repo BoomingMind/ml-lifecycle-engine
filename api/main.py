@@ -26,7 +26,6 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.responses import Response
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
-from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from fastapi import Header
 from starlette.staticfiles import StaticFiles
 
@@ -69,6 +68,26 @@ def _env_csv(name: str, default: str) -> list[str]:
     if not raw:
         return []
     return [p.strip() for p in raw.split(",") if p.strip()]
+
+
+def _configure_http_middleware() -> None:
+    """Register request middlewares before the ASGI app starts."""
+    allowed_hosts = _env_csv("ALLOWED_HOSTS", "*")
+    if allowed_hosts and allowed_hosts != ["*"]:
+        app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
+
+    cors_origins = _env_csv("CORS_ORIGINS", "*")
+    if cors_origins:
+        allow_all = cors_origins == ["*"]
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=cors_origins if not allow_all else ["*"],
+            allow_credentials=not allow_all,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+
+    app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 
 def _configure_logging() -> None:
@@ -146,27 +165,13 @@ def _max_upload_bytes() -> int:
     return _env_int("MAX_UPLOAD_MB", 10) * 1024 * 1024
 
 
+_configure_http_middleware()
+
+
 @app.on_event("startup")
 def _startup() -> None:
     """Initialize config and load the model once per process."""
     _configure_logging()
-
-    allowed_hosts = _env_csv("ALLOWED_HOSTS", "*")
-    if allowed_hosts and allowed_hosts != ["*"]:
-        app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
-
-    cors_origins = _env_csv("CORS_ORIGINS", "*")
-    if cors_origins:
-        allow_all = cors_origins == ["*"]
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=cors_origins if not allow_all else ["*"],
-            allow_credentials=not allow_all,
-            allow_methods=["*"],
-            allow_headers=["*"],
-        )
-
-    app.add_middleware(GZipMiddleware, minimum_size=1024)
 
     # Read environment-driven configuration for this process.
     cfg = load_api_config()
