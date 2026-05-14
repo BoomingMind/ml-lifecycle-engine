@@ -24,31 +24,10 @@ It combines model training, experiment tracking, model packaging, API serving, b
 - Ships with Docker Compose, Nginx, Prometheus, and Grafana for local platform operations
 - Includes automated tests and GitHub Actions CI
 
-## Why This system Matters
-
-In real manufacturing environments, visual inspection systems need more than a trained model.
-
-They also need:
-
-- reproducible training
-- model versioning
-- safe promotion rules
-- reliable serving
-- operational visibility
-- monitoring for changing behavior over time
-
-DefectGuard demonstrates that full lifecycle.
-
-It is a strong portfolio project for roles involving:
-
-- MLOps
-- machine learning engineering
-- computer vision platforms
-- production AI systems
 
 ## Architecture
 
-At a high level, the platform is organized into five layers:
+the platform is organized into five layers:
 
 - Data layer: dataset download, manifest validation, dataset config, DVC stages
 - Training layer: YOLOv8 training, MLflow tracking, evaluation, registry packaging
