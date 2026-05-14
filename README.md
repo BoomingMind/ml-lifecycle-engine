@@ -18,6 +18,7 @@ Install dependencies:
 
 ```bash
 pip3 install -r requirements.txt -r requirements-mlops.txt
+pip3 install -r requirements-dev.txt
 ```
 
 Start the API locally (without Docker):
@@ -46,6 +47,14 @@ Metrics (Prometheus format):
 curl http://127.0.0.1:8000/metrics
 ```
 
+## Dataset (MVTec AD)
+
+Download and extract the MVTec AD dataset into `data/raw/mvtec_ad`:
+
+```bash
+python3 scripts/download_mvtec_ad.py --out data/raw/mvtec_ad
+```
+
 ## Quickstart (Docker Compose)
 
 ```bash
@@ -70,8 +79,9 @@ PYTHONPATH=src python3 scripts/train.py --data data/dataset.yaml
 
 ## DVC Pipeline
 
-`dvc.yaml` wires two stages:
+`dvc.yaml` wires stages:
 
+- `download_mvtec_ad`: download/extract MVTec AD
 - `validate`: validate `data/manifest.csv`
 - `train`: train YOLOv8 using `params.yaml`
 
@@ -83,4 +93,3 @@ API:
 - `MLFLOW_TRACKING_URI`: MLflow tracking server
 - `MLFLOW_MODEL_URI`: model URI for serving (e.g. `models:/defect-yolo/Production`)
 - `PREDICTION_LOG_PATH`: where to write JSONL prediction logs
-

@@ -1,4 +1,10 @@
 stages:
+  download_mvtec_ad:
+    cmd: python3 scripts/download_mvtec_ad.py --out data/raw/mvtec_ad
+    deps:
+      - scripts/download_mvtec_ad.py
+    outs:
+      - data/raw/mvtec_ad
   validate:
     cmd: PYTHONPATH=src python3 scripts/validate_data.py --manifest data/manifest.csv
     deps:

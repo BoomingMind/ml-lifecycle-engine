@@ -8,6 +8,8 @@ env/
 
 data/predictions.jsonl
 data/reference_predictions.jsonl
+data/raw/mvtec_ad/
+data/raw/*.tar.xz
 reports/
 runs/
 mlruns/
