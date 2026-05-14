@@ -13,6 +13,7 @@ a stable, JSON-friendly `Prediction` schema.
 
 import base64
 import io
+import os
 from dataclasses import dataclass
 from typing import Any
 
@@ -55,6 +56,15 @@ class YoloPredictor:
         #
         # We store the chosen mode in `self._kind` so predict_image_bytes() can
         # branch quickly without re-checking input arguments.
+        # Confidence threshold controls how "sure" the model must be before a box
+        # is returned. Lower values show more possible defects; higher values show
+        # only stronger predictions. We make this runtime-configurable so a newly
+        # trained model can be inspected without editing code.
+        try:
+            self._conf = float(os.getenv("YOLO_PREDICT_CONF", os.getenv("YOLO_CONF", "0.25")))
+        except ValueError:
+            self._conf = 0.25
+
         if mlflow_model_uri:
             # Mode 1: MLflow.
             # `mlflow_model_uri` can look like:
@@ -118,7 +128,7 @@ class YoloPredictor:
         arr = np.array(image)
         # Step 3: run YOLO prediction. It returns a list of results (one per input image).
         # verbose=False keeps logs quiet during serving.
-        results = self._model.predict(arr, verbose=False)
+        results = self._model.predict(arr, verbose=False, conf=self._conf)
         # Step 4: convert the rich result object into simple JSON-friendly lists.
         # Ultralytics returns tensors and objects; we translate to dict of python lists.
         record = self._format_ultralytics(results[0])
