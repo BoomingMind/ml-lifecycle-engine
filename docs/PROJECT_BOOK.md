@@ -3329,7 +3329,668 @@ It also includes:
 
 If someone understands this file, they start thinking like a platform engineer, not only like a model trainer.
 
-## 56. Final Summary
+## 56. Deep Dive: Monitoring, Drift, Tests, And CI
+
+This appendix covers the last major operational parts of the project.
+
+These parts are very important because a real machine learning system is not finished when the API returns predictions.
+
+A mature system also needs to answer:
+
+- Is the service healthy?
+- Is prediction behavior changing over time?
+- Are code changes breaking existing behavior?
+- Does every new commit get checked automatically?
+
+That is what this section is about.
+
+## 56.1 Deep Dive: Monitoring And Drift
+
+Monitoring in this project happens at two different levels.
+
+### Level 1: Service Monitoring
+
+This is about the software system itself.
+
+Examples:
+
+- how many requests arrived?
+- how long did requests take?
+- is the service up?
+
+These questions are answered with:
+
+- Prometheus
+- Grafana
+- `/metrics`
+
+### Level 2: Model Behavior Monitoring
+
+This is about model output behavior.
+
+Examples:
+
+- are we seeing more detections than before?
+- are confidence scores changing over time?
+- does the current prediction distribution differ from the baseline?
+
+These questions are answered with:
+
+- prediction logs
+- reference snapshots
+- drift report generation
+- Evidently
+
+Both levels matter.
+
+A system can have:
+
+- healthy infrastructure but drifting model behavior
+
+or:
+
+- stable model behavior but broken infrastructure
+
+Good MLOps watches both.
+
+## 56.2 Deep Dive: `monitoring/prometheus.yml`
+
+This file tells Prometheus where to collect metrics from.
+
+Prometheus uses a pull model.
+
+That means:
+
+- Prometheus does not wait for services to send metrics
+- Prometheus actively requests metrics from targets on a schedule
+
+### Key Sections
+
+#### `global.scrape_interval`
+
+This controls how often Prometheus asks targets for new metrics.
+
+In this project it is:
+
+```text
+15s
+```
+
+That means every 15 seconds Prometheus attempts a fresh scrape.
+
+Why this matters:
+
+- shorter intervals give more detailed data
+- longer intervals reduce load
+
+#### `scrape_configs`
+
+This section defines which targets should be scraped.
+
+For this project:
+
+- job name: `api`
+- metrics path: `/metrics`
+- target: `api:8000`
+
+Why `api:8000` works:
+
+- inside Docker Compose, services can reach each other by service name
+
+So Prometheus does not need `localhost`.
+
+It needs the internal service hostname.
+
+### Mental Model
+
+Every 15 seconds:
+
+1. Prometheus calls `http://api:8000/metrics`
+2. the API returns metric values in Prometheus text format
+3. Prometheus stores those values as time series
+
+That is the full collection loop.
+
+## 56.3 Deep Dive: Grafana Datasource Provisioning
+
+File:
+
+- `monitoring/grafana/provisioning/datasources/datasource.yml`
+
+This file makes Grafana usable immediately.
+
+Without provisioning:
+
+- Grafana would start
+- but a human would still need to open the UI
+- manually add Prometheus as a datasource
+
+This file automates that.
+
+### Key Concepts
+
+#### `apiVersion`
+
+This tells Grafana which provisioning file format version is being used.
+
+#### Datasource Definition
+
+The datasource is named `Prometheus` and points to:
+
+```text
+http://prometheus:9090
+```
+
+Again, this uses the Docker Compose internal service name.
+
+#### `access: proxy`
+
+This means requests go through Grafana, not directly from the browser to Prometheus.
+
+Why this is useful:
+
+- simplifies access pattern
+- works well inside the containerized stack
+
+#### `isDefault: true`
+
+This tells Grafana:
+
+- use this datasource by default for dashboards unless another one is specified
+
+### Mental Model
+
+When Grafana starts:
+
+1. it reads provisioning files
+2. it creates the Prometheus datasource automatically
+3. dashboards can use it immediately
+
+That is a small but valuable operator convenience feature.
+
+## 56.4 Deep Dive: Prediction Logging As Monitoring Input
+
+Before drift reporting can happen, the system needs historical prediction records.
+
+That is why `api/main.py` writes each prediction to:
+
+- `data/predictions.jsonl`
+
+Each line contains fields such as:
+
+- timestamp
+- image hash
+- boxes
+- scores
+- class IDs
+- class names
+
+Why this matters:
+
+- drift monitoring needs data to compare
+- logging prediction behavior creates that data source
+
+This is an important MLOps lesson:
+
+Monitoring is often enabled by earlier design choices in serving code.
+
+If the API did not log prediction results, later drift reporting would be much harder.
+
+## 56.5 Deep Dive: `scripts/drift_report.py`
+
+This file is the center of model behavior monitoring in the repo.
+
+Its job is to compare:
+
+- reference prediction behavior
+- current prediction behavior
+
+and generate an HTML report.
+
+### Mental Model
+
+This script does not check true accuracy.
+
+It checks whether prediction behavior looks statistically different.
+
+That is a very important distinction.
+
+It answers:
+
+- "Are outputs changing?"
+
+It does not fully answer:
+
+- "Is the model still correct?"
+
+That second question requires fresh labels.
+
+### Part 1: `_read_jsonl(path)`
+
+Purpose:
+
+- read a JSONL log file into a pandas DataFrame
+
+Step by step:
+
+1. create an empty row list
+2. return empty DataFrame if file does not exist
+3. open the file
+4. strip each line
+5. skip empty lines
+6. parse JSON for each line
+7. build a DataFrame from collected rows
+
+Why JSONL is convenient here:
+
+- each log entry is independent
+- no full-file JSON array format is required
+- appending in the API stays simple
+
+### Part 2: `_explode_predictions(df)`
+
+This is the most conceptually important helper in the file.
+
+The raw prediction log contains variable-length arrays:
+
+- one image may have 0 boxes
+- another may have 3 boxes
+- another may have 20 boxes
+
+Drift tools work better on fixed columns.
+
+So the script converts variable-length records into derived numeric features:
+
+- `n_boxes`
+- `max_score`
+- `mean_score`
+
+Why this is smart:
+
+- these columns are simple
+- they summarize behavior
+- they are easy for drift tooling to compare across datasets
+
+This is feature engineering for monitoring.
+
+### Part 3: `main()`
+
+The main workflow is:
+
+1. read CLI arguments
+2. load reference predictions
+3. load current predictions
+4. transform both into numeric monitoring features
+5. fail if either side is missing
+6. create an Evidently `Report`
+7. use `DataDriftPreset`
+8. run the report
+9. save HTML output
+
+### Why The HTML Report Matters
+
+HTML output is useful because:
+
+- it is easy for humans to open
+- it can be shared with teammates
+- it makes drift easier to inspect visually
+
+### Practical Limitation
+
+This monitoring method is intentionally lightweight.
+
+It is a strong portfolio pattern, but in a larger production system you might later add:
+
+- label-based monitoring
+- class-wise drift analysis
+- alert thresholds
+- scheduled reporting jobs
+
+## 56.6 Deep Dive: Reference Baselines
+
+File:
+
+- `scripts/set_reference_predictions.py`
+
+This script creates the baseline file:
+
+- `data/reference_predictions.jsonl`
+
+Why a baseline is needed:
+
+- drift is always "change compared to something"
+
+Without a reference period, the word "drift" has no anchor.
+
+### Mental Model
+
+The workflow is:
+
+1. let the system run during a stable period
+2. decide that period represents normal behavior
+3. copy current predictions to the reference file
+4. compare future predictions against that reference
+
+This is a simple but effective beginner-friendly baseline strategy.
+
+## 56.7 Deep Dive: End-To-End Monitoring Story
+
+To mentally simulate the monitoring stack:
+
+1. API serves predictions
+2. API appends JSONL records
+3. Prometheus scrapes service metrics
+4. Grafana visualizes service metrics
+5. reference prediction snapshot is created
+6. new predictions accumulate
+7. drift script compares reference vs current logs
+8. Evidently generates an HTML report
+
+This means the project monitors both:
+
+- system health
+- model behavior
+
+That is the real MLOps mindset.
+
+## 56.8 Deep Dive: Testing Philosophy In This Repo
+
+The tests in this project focus on the API because that is the user-facing contract.
+
+Why API tests are high value here:
+
+- many parts of the platform depend on API stability
+- frontend, monitoring, and users all rely on the API response shape
+
+These tests are not huge, but they are strategically chosen.
+
+They protect important guarantees.
+
+## 56.9 Deep Dive: `tests/conftest.py`
+
+This is a small file, but an important one.
+
+Pytest automatically imports `conftest.py` before running tests.
+
+In this project, it modifies Python's import path so tests can import the project package from `src/`.
+
+### Why This Matters
+
+Without this setup, tests might fail because Python cannot locate:
+
+- `defect_detection`
+
+The file computes the absolute `src/` path and inserts it into `sys.path` if needed.
+
+This is a practical test-environment setup detail.
+
+## 56.10 Deep Dive: `tests/test_api.py`
+
+This file verifies core API behavior.
+
+It uses FastAPI's `TestClient`, which lets tests send requests to the application without needing a real external server process.
+
+### Mental Model
+
+Each test follows a pattern:
+
+1. configure environment for test safety
+2. import the app
+3. create a `TestClient`
+4. call an endpoint
+5. assert expected behavior
+
+### Why `DISABLE_MODEL_LOAD=1` Is Important
+
+Most tests set:
+
+```text
+DISABLE_MODEL_LOAD=1
+```
+
+Why?
+
+Because tests should not require:
+
+- a real weights file
+- an MLflow server
+- slow model loading
+
+The dummy predictor mode makes tests:
+
+- fast
+- deterministic
+- CI-friendly
+
+### `_make_test_image_bytes()`
+
+This helper generates a tiny in-memory PNG image.
+
+Why do this instead of reading a file from disk?
+
+- keeps tests self-contained
+- avoids fixture file management
+- avoids dependency on external assets
+
+The function:
+
+1. creates a black numpy image
+2. converts it to a PIL image
+3. writes it to an in-memory buffer
+4. returns raw bytes
+
+That gives the tests realistic upload input without needing real sample files.
+
+### `test_health_endpoint()`
+
+Purpose:
+
+- verify `/health` returns success and the expected JSON structure
+
+Why this matters:
+
+- health endpoints are often used by deployment systems
+
+### `test_ready_endpoint()`
+
+Purpose:
+
+- verify `/ready` reports ready when the dummy predictor is active
+
+Why this matters:
+
+- readiness behavior affects deployment orchestration
+
+### `test_ui_root_serves_html()`
+
+Purpose:
+
+- verify `/` serves the UI page successfully
+
+Why this matters:
+
+- the project includes a user-facing demo frontend
+
+### `test_predict_endpoint_returns_schema()`
+
+Purpose:
+
+- verify `/predict` returns the expected output keys
+
+This is one of the most important tests in the file.
+
+Why?
+
+Because downstream consumers rely on this schema.
+
+If a future edit accidentally removed or renamed:
+
+- `boxes`
+- `scores`
+- `class_ids`
+- `class_names`
+- `image_sha256`
+- `ts`
+
+then clients could break.
+
+This test protects that contract.
+
+### `test_api_key_auth_for_predict()`
+
+Purpose:
+
+- verify that prediction auth works correctly when `API_KEY` is configured
+
+It checks both:
+
+- unauthorized request returns 401
+- authorized request succeeds
+
+Why this matters:
+
+- auth logic is easy to accidentally break during refactors
+
+## 56.11 Deep Dive: CI Workflow
+
+File:
+
+- `.github/workflows/ci.yml`
+
+CI means Continuous Integration.
+
+In practice, it means:
+
+- every push and pull request gets automated checks
+
+That helps catch problems early.
+
+### Mental Model
+
+A CI workflow is like an automated reviewer that never gets tired.
+
+Whenever code changes:
+
+1. GitHub starts a fresh runner machine
+2. the repository is checked out
+3. Python is installed
+4. dependencies are installed
+5. linting runs
+6. tests run
+
+If something fails, the workflow becomes a visible warning.
+
+### `on: push` And `on: pull_request`
+
+These triggers mean:
+
+- check direct pushes
+- also check code proposed through pull requests
+
+That covers common collaboration flows.
+
+### `actions/checkout`
+
+This step downloads the repository contents into the runner.
+
+### `actions/setup-python`
+
+This step installs Python 3.11 and enables pip caching.
+
+Why caching matters:
+
+- repeated runs become faster
+
+### Install Dependencies Step
+
+The workflow installs:
+
+- runtime dependencies
+- MLOps dependencies
+- developer/testing dependencies
+
+This makes the CI environment capable of:
+
+- importing the app
+- running tests
+- running lint
+
+### Lint Step
+
+This runs:
+
+```text
+ruff check .
+```
+
+Linting catches issues such as:
+
+- import problems
+- unused code
+- style problems
+- some correctness issues
+
+Why lint before tests?
+
+- it provides a fast first quality gate
+
+### Test Step
+
+This runs:
+
+```text
+pytest
+```
+
+with environment variables such as:
+
+- `DISABLE_MODEL_LOAD=1`
+- `PYTHONPATH=src`
+
+Why these matter:
+
+- tests use the dummy predictor
+- package imports work inside CI
+
+## 56.12 Deep Dive: Why Tests And Monitoring Belong Together
+
+Tests and monitoring serve different time horizons.
+
+Tests help before deployment:
+
+- "Did we break expected behavior?"
+
+Monitoring helps after deployment:
+
+- "Is the live system behaving differently now?"
+
+You need both.
+
+Without tests:
+
+- broken code may reach production
+
+Without monitoring:
+
+- production problems may go unnoticed
+
+This repository includes both, which is one reason it feels more like a real platform than a notebook project.
+
+## 56.13 Final Operational Mental Model
+
+If you want one compact operational summary, remember this sequence:
+
+1. code changes are linted and tested in CI
+2. the API exposes health and metrics
+3. Prometheus collects service metrics
+4. Grafana visualizes those metrics
+5. predictions are logged as JSONL
+6. reference baselines are created
+7. drift reports compare past vs present prediction behavior
+
+That is the complete reliability story of this repository.
+
+## 57. Final Summary
 
 This project is a full machine learning product skeleton for manufacturing defect detection.
 
