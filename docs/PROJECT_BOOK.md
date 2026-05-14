@@ -1622,7 +1622,972 @@ If you are new, read in this order:
 
 That order moves from big picture to implementation details.
 
-## 54. Final Summary
+## 54. Deep Dive Chapters For The Three Most Important Files
+
+This appendix goes one level deeper than the earlier sections.
+
+The goal here is not only to say what each file does.
+
+The goal is to help you mentally "walk through the code" in the same order the computer does.
+
+If you can follow these three files, you understand the core logic of the product:
+
+- `api/main.py` controls serving
+- `src/defect_detection/yolo.py` controls prediction abstraction
+- `scripts/train.py` controls training and model lifecycle decisions
+
+## 54.1 Deep Dive: `api/main.py`
+
+Think of `api/main.py` as the receptionist, security desk, traffic controller, and response writer of the whole system.
+
+It is the file that turns the model into a network service.
+
+### Mental Model
+
+When the API process starts, this file:
+
+1. creates the web app
+2. prepares metrics and logging
+3. loads configuration
+4. loads the model once
+5. waits for incoming HTTP requests
+
+When a request arrives, this file:
+
+1. checks the request
+2. routes it to the correct function
+3. runs business logic
+4. returns a response
+5. records logs and metrics
+
+### Part 1: Imports
+
+Why are there many imports?
+
+Because this file is where several responsibilities meet:
+
+- `fastapi` handles the web framework
+- `prometheus_client` handles metrics
+- `logging`, `json`, and `time` handle observability
+- `hashlib` handles stable image hashing
+- `uuid` and `contextvars` help with request tracing
+- `Path` and file operations handle UI files and prediction logs
+- project imports like `load_api_config`, `resolve_model_uri`, and `YoloPredictor` connect serving to the rest of the codebase
+
+This is normal for a service entrypoint.
+
+It is not a "small algorithm file".
+
+It is a "coordination file".
+
+### Part 2: Application Creation
+
+The line that creates the `FastAPI` app is the birth of the service.
+
+From that point on, routes and middleware are attached to this `app` object.
+
+You can think of `app` as the central object representing the running web service.
+
+### Part 3: Process-Wide Objects
+
+The file creates a few objects at import time:
+
+- request ID context storage
+- Prometheus counters
+- Prometheus histograms
+- frontend static mounting
+
+Why do this early?
+
+Because these objects should exist for the whole lifetime of the process.
+
+They are not per-request objects.
+
+If they were created on every request:
+
+- performance would be worse
+- metrics could break
+- behavior could become inconsistent
+
+### Part 4: Helper Functions
+
+#### `_env_int(name, default)`
+
+This helper exists because environment variables are always strings.
+
+If you want `MAX_UPLOAD_MB=10` to behave like a number, you must convert it.
+
+This helper also protects the program:
+
+- if conversion fails
+- if someone provides a broken value
+
+then the code falls back to the default.
+
+That is safer than crashing on startup.
+
+#### `_env_csv(name, default)`
+
+Some environment variables contain a comma-separated list.
+
+Examples:
+
+- `CORS_ORIGINS`
+- `ALLOWED_HOSTS`
+
+This helper converts one string like:
+
+```text
+https://a.com,https://b.com
+```
+
+into a Python list like:
+
+```python
+["https://a.com", "https://b.com"]
+```
+
+That makes later middleware configuration easier.
+
+#### `_configure_logging()`
+
+This is where the service decides how loud or quiet logging should be.
+
+The code reads `LOG_LEVEL` and sets up Python logging.
+
+Why does this matter?
+
+Because in real environments:
+
+- local development may want more detail
+- production may want cleaner logs
+- debugging incidents may require temporarily more verbosity
+
+#### `_json_log(event, **fields)`
+
+This helper creates structured logs.
+
+Instead of plain text like:
+
+```text
+something failed
+```
+
+it writes structured JSON-like content with keys such as:
+
+- event
+- timestamp
+- request ID
+- method
+- path
+- status
+
+Why this is better:
+
+- machines can parse it easily
+- log platforms can index fields
+- humans can search specific events faster
+
+### Part 5: Request Middleware
+
+#### `_request_context(request, call_next)`
+
+This is one of the most important functions in `api/main.py`.
+
+It runs around every request.
+
+Think of it like airport security and tracking combined.
+
+Before the request reaches the final route function, middleware can:
+
+- inspect headers
+- start timers
+- attach metadata
+
+After the route finishes, middleware can:
+
+- add response headers
+- record metrics
+- write logs
+
+This middleware does the following:
+
+1. reads or creates a request ID
+2. stores it in a context variable
+3. starts a timer
+4. calls the real route handler
+5. adds tracing and browser security headers
+6. logs method, path, status, and duration
+
+Why request ID matters:
+
+- one user request may create several logs
+- the request ID lets you connect them
+
+Why timing matters:
+
+- response latency is a core operational metric
+
+Why security headers matter:
+
+- they reduce some browser-based attack risks
+
+### Part 6: Exception Handling
+
+#### `_http_exception_handler(...)`
+
+This handles expected API errors such as:
+
+- unauthorized access
+- bad request input
+- oversized upload
+- missing UI file
+
+Instead of letting error formatting vary, this function guarantees a clean JSON response.
+
+#### `_unhandled_exception_handler(...)`
+
+This is the catch-all safety net.
+
+If something unexpected breaks:
+
+- the event is logged
+- the client receives a 500 response
+- debug mode can optionally expose more detail
+
+Why this matters:
+
+- production systems should fail in a controlled way
+
+### Part 7: Security Helpers
+
+#### `_require_api_key(x_api_key)`
+
+This function makes authentication optional by configuration.
+
+If `API_KEY` is not set:
+
+- no auth is required
+
+If `API_KEY` is set:
+
+- requests must send the same value in the `X-API-Key` header
+
+This design is practical because:
+
+- local demos stay easy
+- real deployments can add a basic protection layer
+
+#### `_max_upload_bytes()`
+
+This helper converts megabytes to bytes.
+
+Why not hardcode bytes directly?
+
+Because humans usually think in MB, not in raw byte counts.
+
+### Part 8: Startup Lifecycle
+
+#### `_startup()`
+
+This function runs once when the API service starts.
+
+This is extremely important.
+
+You do not want to load a model for every request.
+
+That would make the API painfully slow.
+
+So the code loads the predictor once at startup and keeps it in memory.
+
+Step by step, `_startup()`:
+
+1. configures logging
+2. reads allowed hosts
+3. configures trusted host protection if needed
+4. reads CORS settings
+5. configures browser access policy
+6. enables gzip compression
+7. loads API config from environment variables
+8. configures MLflow tracking if needed
+9. resolves the chosen model source
+10. stores config on `app.state`
+11. creates either:
+    - a dummy predictor for tests, or
+    - a real `YoloPredictor`
+
+Why `app.state` is used:
+
+- it is a safe shared place for app-wide objects
+- all route functions can access the same predictor and config
+
+Why dummy predictor mode exists:
+
+- CI tests should not depend on a heavy real model
+- tests need predictable behavior
+
+### Part 9: UI Routes
+
+#### `ui()` and `ui_alias()`
+
+These functions serve the browser UI.
+
+`ui()`:
+
+- checks whether `index.html` exists
+- returns the file if present
+- returns 404 if not present
+
+`ui_alias()`:
+
+- simply reuses `ui()`
+
+Why have both `/` and `/ui`?
+
+- convenience for users
+- easier demo experience
+
+### Part 10: Operational Endpoints
+
+#### `health()`
+
+This endpoint answers:
+
+"Is the process alive?"
+
+It does not prove the model is loaded.
+
+It only proves the service itself is up enough to answer.
+
+#### `ready()`
+
+This endpoint answers:
+
+"Is the service ready to serve real predictions?"
+
+That is a stronger promise than health.
+
+#### `version()`
+
+This endpoint answers:
+
+"What build of the service is running?"
+
+That becomes useful during deployment debugging.
+
+### Part 11: Metrics Endpoint
+
+#### `metrics(...)`
+
+This endpoint returns Prometheus-formatted metrics.
+
+Prometheus scrapes it on a schedule.
+
+This function is small, but operationally important.
+
+Without it:
+
+- Prometheus sees nothing
+- Grafana dashboards stay empty
+
+### Part 12: The Main Business Function
+
+#### `predict(...)`
+
+This is the most important request handler in the entire service.
+
+It is where uploaded bytes become usable machine learning output.
+
+Step by step:
+
+1. start timing
+2. assume the request will succeed unless proven otherwise
+3. check API key
+4. read uploaded image bytes
+5. reject an empty file
+6. reject files over the allowed size
+7. send bytes to the predictor
+8. count the successful prediction
+9. hash the image for stable identification
+10. create a record with timestamp and predictions
+11. append the record to the JSONL log
+12. return the record to the client
+13. if a known API error happened, preserve its status
+14. if an unknown error happened, convert it to 500
+15. always record request metrics in `finally`
+
+Why hashing is smart:
+
+- you can identify repeated images without storing raw image content in the log
+
+Why logging predictions is smart:
+
+- later monitoring does not need to replay old requests
+
+Why metrics are updated in `finally`:
+
+- success and failure should both appear in operational metrics
+
+### Part 13: The Full Serving Chain
+
+To truly understand `api/main.py`, follow this chain:
+
+1. browser sends request
+2. middleware starts trace and timer
+3. route validates input
+4. route calls predictor
+5. predictor returns normalized data
+6. route writes log and response
+7. middleware writes access log
+8. Prometheus metrics are updated
+
+That is the living heart of the online service.
+
+## 54.2 Deep Dive: `src/defect_detection/yolo.py`
+
+This file solves a very important architecture problem:
+
+How can the rest of the system ask for predictions without caring how the model was loaded?
+
+That is the entire reason this file exists.
+
+### Mental Model
+
+This file is an adapter.
+
+An adapter hides complexity behind one clean interface.
+
+Without this file, `api/main.py` would need to know:
+
+- how MLflow models accept input
+- how raw YOLO weights accept input
+- how to normalize outputs from both branches
+
+That would make the API file much more complicated.
+
+Instead, `YoloPredictor` keeps that complexity here.
+
+### Part 1: `Prediction`
+
+The `Prediction` dataclass is the normalized output contract.
+
+No matter how the model was loaded, the rest of the code can expect:
+
+- `boxes`
+- `scores`
+- `class_ids`
+- `class_names`
+
+This is an important software design decision.
+
+It means:
+
+- logging code stays simple
+- API response format stays stable
+- frontend code has one predictable shape to read
+
+### Part 2: `YoloPredictor.__init__(...)`
+
+The constructor decides the model-loading strategy.
+
+There are two modes.
+
+#### Mode A: MLflow Mode
+
+If `mlflow_model_uri` is provided:
+
+- the class stores `_kind = "mlflow"`
+- it loads a PyFunc model with `mlflow.pyfunc.load_model(...)`
+
+This is useful when:
+
+- the model is stored in MLflow
+- you want registry-based serving
+- you want URIs like `models:/defect-yolo/Production`
+
+#### Mode B: Direct Weights Mode
+
+If `model_path` is provided instead:
+
+- the class stores `_kind = "weights"`
+- it loads a local YOLO `.pt` file directly
+
+This is useful when:
+
+- you have a weights file on disk
+- you want simple local serving
+- you do not want registry dependency for a demo
+
+#### Why `_kind` Exists
+
+The `_kind` field is a simple switch.
+
+Later, during prediction, the code does not need to guess again.
+
+It already knows which branch to run.
+
+That keeps runtime logic clean.
+
+### Part 3: `predict_image_bytes(image_bytes)`
+
+This is the main function in `yolo.py`.
+
+The input is raw image bytes.
+
+That is exactly what the FastAPI upload handler naturally provides.
+
+So this function is the right place to translate raw bytes into model-friendly input.
+
+#### Branch A: MLflow Prediction
+
+MLflow PyFunc models expect table-like input, usually a DataFrame.
+
+That means raw image bytes cannot just be passed directly.
+
+So the code does this:
+
+1. base64-encode the image bytes
+2. convert the bytes into normal UTF-8 text
+3. place that text in a one-row pandas DataFrame
+4. call `self._model.predict(df)`
+5. read the returned object
+6. normalize that output into `Prediction`
+
+Why base64 is used:
+
+- DataFrames and JSON-like systems handle text better than raw binary bytes
+
+Why a one-row DataFrame is used:
+
+- PyFunc models are designed for tabular batch-style input
+
+Why output normalization is needed:
+
+- different PyFunc implementations may return:
+  - a Python list
+  - a pandas DataFrame
+
+This code protects the rest of the system from that variation.
+
+#### Branch B: Direct YOLO Prediction
+
+Raw YOLO weights do not expect a DataFrame.
+
+They work naturally with images.
+
+So the code does this:
+
+1. wrap bytes in an in-memory buffer
+2. open the image with PIL
+3. convert to RGB
+4. convert to a numpy array
+5. call YOLO prediction
+6. normalize the first result into plain Python lists
+
+Why convert to RGB:
+
+- images may come in grayscale, RGBA, CMYK, or other modes
+- converting to RGB creates a more predictable input format
+
+Why convert to numpy:
+
+- Ultralytics accepts numpy image arrays naturally
+
+### Part 4: `_format_ultralytics(result)`
+
+Ultralytics results are rich objects with tensors and metadata.
+
+That is useful for advanced Python code, but not ideal for:
+
+- JSON responses
+- logs
+- frontend display
+
+So this helper converts those rich objects into plain values.
+
+Step by step:
+
+1. read `result.boxes`
+2. handle the no-detections case
+3. convert `xyxy` box tensor to a Python list
+4. convert confidence scores to a Python list
+5. convert class IDs to integers
+6. map class IDs to human-readable names
+7. return a simple dictionary
+
+Why CPU conversion happens:
+
+- tensors may live on GPU
+- JSON serialization requires plain Python-compatible data
+
+### Part 5: Why This File Matters Architecturally
+
+This file keeps the API clean.
+
+The API can say:
+
+```python
+pred = predictor.predict_image_bytes(content)
+```
+
+and not worry about:
+
+- registry models
+- local weight models
+- DataFrames
+- base64 conversion
+- tensor formatting
+
+That is good architecture.
+
+One file owns one hard problem.
+
+## 54.3 Deep Dive: `scripts/train.py`
+
+This file is the main offline machine learning workflow.
+
+If `api/main.py` is the online heart of the product, `scripts/train.py` is the offline heart.
+
+It takes the system from configuration to trained and optionally promoted model.
+
+### Mental Model
+
+This script has five big jobs:
+
+1. read configuration
+2. train a YOLO model
+3. evaluate the trained model
+4. log and package the model in MLflow
+5. optionally decide whether it deserves Production
+
+That is why this file feels more complex than a simple training script.
+
+It is not only "fit model and exit".
+
+It is also:
+
+- experiment tracking
+- packaging
+- quality control
+- registry workflow
+
+### Part 1: `EvalMetrics`
+
+This dataclass stores the two evaluation metrics the project cares about most:
+
+- `map50`
+- `map50_95`
+
+Why store them in a dataclass?
+
+- it gives a clear named structure
+- it is easier to pass around than a loose tuple
+- it can be converted to a dictionary cleanly with `asdict(...)`
+
+### Part 2: `_load_yaml(path)`
+
+This helper reads YAML safely.
+
+Why not inline this code inside `main()`?
+
+Because reading configuration is a small reusable responsibility.
+
+Keeping it separate makes the main workflow easier to read.
+
+### Part 3: `_extract_eval_metrics(result)`
+
+This helper exists because third-party libraries do not always expose metrics in one perfectly stable shape.
+
+Ultralytics versions may store metrics in slightly different places.
+
+So this function tries:
+
+- `results_dict`
+- multiple key names
+- `.box.map50`
+- `.box.map`
+
+Why this is good engineering:
+
+- it makes the script more robust across library versions
+- it keeps compatibility logic in one place
+
+### Part 4: `_get_production_map50(client, model_name)`
+
+This helper looks up the current Production model in MLflow Model Registry.
+
+Then it tries to read the `val_map50` tag.
+
+Why store the metric as a model version tag?
+
+Because later promotion logic wants a simple answer:
+
+"What is the current Production model's map50?"
+
+If that information lives directly on the model version, comparison becomes easy.
+
+### Part 5: Argument Parsing And Runtime Inputs
+
+At the start of `main()`, the script builds an argument parser.
+
+It supports:
+
+- params file path
+- dataset YAML override
+- experiment name
+- model register name
+- minimum map50 threshold
+- gate enable flag
+- promotion enable flag
+
+Why support both CLI arguments and environment variables?
+
+Because different environments want different control styles:
+
+- humans often prefer CLI overrides
+- CI/CD and Docker often prefer environment variables
+
+### Part 6: Loading Training Configuration
+
+The script reads `params.yaml` and focuses on the `train` section.
+
+This section contains values such as:
+
+- model
+- data
+- epochs
+- imgsz
+- batch
+
+Then the script decides the final dataset YAML:
+
+- CLI `--data` wins if provided
+- otherwise `params.yaml` is used
+
+Why this precedence rule is helpful:
+
+- stable default config in Git
+- fast ad hoc overrides when experimenting
+
+### Part 7: MLflow Setup
+
+Before training starts, the script:
+
+- configures the MLflow tracking URI
+- sets the experiment name
+
+Why this happens early:
+
+- all later metrics and artifacts need a valid experiment context
+
+### Part 8: Starting The Run
+
+`with mlflow.start_run() as run:` opens the tracking context.
+
+Inside that block:
+
+- params are logged
+- metrics are logged
+- artifacts are logged
+- model registration may happen
+
+Think of an MLflow run as the full official record of one training attempt.
+
+### Part 9: Logging Parameters
+
+The script logs training settings before calling YOLO training.
+
+Why log them?
+
+Because later you want to answer questions like:
+
+- Which learning setup produced this model?
+- Which dataset YAML was used?
+- How many epochs did we train?
+- What image size and batch size were used?
+
+Without parameter logging, experiment comparison becomes weak.
+
+### Part 10: Model Training
+
+The script creates a YOLO object and calls `.train(...)`.
+
+This is the actual model-learning step.
+
+At this stage:
+
+- images are loaded
+- labels are used
+- optimization runs over epochs
+- weights are updated
+
+The result object may include a metrics dictionary and a save directory.
+
+### Part 11: Training Metrics Logging
+
+After training, the script checks `results.results_dict`.
+
+If numeric metrics exist, it logs them to MLflow.
+
+This keeps training information searchable and comparable.
+
+### Part 12: Locating `best.pt`
+
+YOLO training writes outputs under a run directory such as `runs/...`.
+
+The script finds:
+
+```text
+weights/best.pt
+```
+
+Why this matters:
+
+- later steps depend on the final best weights
+- if the file is missing, the training workflow should fail loudly
+
+That is why the script raises `SystemExit` if it cannot find it.
+
+### Part 13: Validation After Training
+
+This is a major production-minded step.
+
+The script does not assume training success means deployment quality.
+
+It reloads the best weights and runs validation:
+
+```python
+evaluator = YOLO(str(best_weights))
+val_result = evaluator.val(data=data_yaml, verbose=False)
+```
+
+Why do this separately?
+
+- training metrics and validation metrics are not the same thing
+- deployment decisions should be based on evaluation quality
+
+### Part 14: Evaluation Metrics Extraction
+
+The script calls `_extract_eval_metrics(val_result)`.
+
+This turns a complex library object into the cleaner `EvalMetrics` dataclass.
+
+Then those values are logged to MLflow.
+
+This is important because:
+
+- future comparisons need saved metric values
+- registry tagging and promotion logic depend on them
+
+### Part 15: Artifact Logging
+
+The script logs the raw weights file:
+
+- useful for debugging
+- useful for direct weights-based serving
+
+Then it logs a PyFunc model:
+
+- useful for standardized MLflow-based serving
+
+This dual logging strategy is practical because it supports two serving styles.
+
+### Part 16: Model Registration
+
+If a register name exists, the script registers the model in MLflow Model Registry.
+
+That creates:
+
+- a model name
+- a version number
+- a registry object that can later be staged or promoted
+
+Why registration matters:
+
+- it turns a run artifact into a managed model asset
+
+### Part 17: Registry Tags
+
+After registration, the script stores evaluation metrics as model version tags.
+
+Why not only keep metrics in the run?
+
+Because promotion logic later thinks in terms of model versions, not only run history.
+
+Tags make the registry itself more informative.
+
+### Part 18: Quality Gate
+
+This is one of the most important production-minded ideas in the repo.
+
+If `--enforce-gate` is enabled:
+
+- missing `map50` causes failure
+- `map50` below threshold causes failure
+
+Why this matters:
+
+- pipelines should stop automatically when quality is not acceptable
+
+Without a gate, weak models can move too far downstream.
+
+### Part 19: Champion Vs Challenger Promotion
+
+If `--promote` is enabled, the script compares the new model against the current Production model.
+
+Terms:
+
+- champion = current Production model
+- challenger = newly trained model
+
+Current policy in this repo:
+
+1. if no Production model exists, promote the challenger
+2. if challenger metric is missing, still allow promotion
+3. otherwise promote only if challenger `map50` is higher
+
+Why have a policy at all?
+
+Because "latest" is not always "best".
+
+This is a simple but meaningful real-world MLOps concept.
+
+### Part 20: Why This Script Is Important
+
+This file is where machine learning work becomes platform work.
+
+It does not only train.
+
+It also:
+
+- records evidence
+- packages the result
+- applies deployment rules
+- updates the registry
+
+That is why it is one of the best files in the repo for understanding MLOps thinking.
+
+### Part 21: The Full Offline Lifecycle
+
+To mentally simulate `scripts/train.py`, remember this chain:
+
+1. read config
+2. choose dataset
+3. open MLflow run
+4. log parameters
+5. train YOLO
+6. collect training metrics
+7. find best weights
+8. validate best weights
+9. extract evaluation metrics
+10. log artifacts and packaged model
+11. optionally register
+12. optionally gate
+13. optionally promote
+
+That is the full offline lifecycle of the model in this repository.
+
+## 55. Final Summary
 
 This project is a full machine learning product skeleton for manufacturing defect detection.
 
