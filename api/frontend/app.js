@@ -5,6 +5,7 @@ const statusEl = document.getElementById("status");
 const previewImg = document.getElementById("previewImg");
 const overlay = document.getElementById("overlay");
 const jsonOut = document.getElementById("jsonOut");
+let currentPreviewUrl = null;
 
 // Browser localStorage key used to remember the API key between page refreshes.
 const API_KEY_STORAGE = "defectguard_api_key";
@@ -24,6 +25,37 @@ function clearOverlay() {
   // The canvas sits above the image; clearing it removes any old boxes.
   const ctx = overlay.getContext("2d");
   ctx.clearRect(0, 0, overlay.width, overlay.height);
+}
+
+function releasePreviewUrl() {
+  // Revoke old object URLs so the browser can free that temporary memory.
+  if (currentPreviewUrl) {
+    URL.revokeObjectURL(currentPreviewUrl);
+    currentPreviewUrl = null;
+  }
+}
+
+function showPreviewFile(file) {
+  // Most browsers support temporary object URLs for local previews.
+  // Some embedded webviews are less reliable, so we fall back to FileReader.
+  releasePreviewUrl();
+
+  try {
+    currentPreviewUrl = URL.createObjectURL(file);
+    previewImg.src = currentPreviewUrl;
+    return;
+  } catch (_error) {
+    // Continue to the FileReader fallback below.
+  }
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    previewImg.src = typeof reader.result === "string" ? reader.result : "";
+  };
+  reader.onerror = () => {
+    setStatus("Preview failed to load", "error");
+  };
+  reader.readAsDataURL(file);
 }
 
 function resizeCanvasToImage() {
@@ -111,8 +143,8 @@ fileInput.addEventListener("change", () => {
   setStatus("Image selected");
   jsonOut.textContent = "";
   clearOverlay();
-  // Create a temporary browser URL so the image can be previewed instantly.
-  previewImg.src = URL.createObjectURL(f);
+  // Show the chosen file in the preview area before any API request is made.
+  showPreviewFile(f);
 });
 
 // Save API key while the user types or when they leave the field.
