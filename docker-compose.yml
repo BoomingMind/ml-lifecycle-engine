@@ -1,0 +1,28 @@
+services:
+  mlflow:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.mlflow
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow:/mlflow
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_MODEL_URI: ${MLFLOW_MODEL_URI:-}
+      MODEL_PATH: ${MODEL_PATH:-}
+      PREDICTION_LOG_PATH: /app/data/predictions.jsonl
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - mlflow
+
+volumes:
+  mlflow: {}
