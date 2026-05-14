@@ -8,24 +8,99 @@ What it does:
 - Trains Ultralytics YOLOv8
 - Logs metrics/params/artifacts to MLflow
 - Logs a PyFunc model so serving can load the model by URI (optional registry)
+
+Optional (production-grade) behavior:
+- Evaluate the trained model on the validation split (YOLOv8 `val`)
+- Enforce a quality gate: only promote if mAP@0.5 (map50) meets a threshold
+- Champion vs challenger: only replace Production if the new model is better
 """
 
 import argparse
 import os
+from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Any
 
 import mlflow
 import yaml
+from mlflow.tracking import MlflowClient
 from ultralytics import YOLO
 
 from defect_detection.mlflow_models import YOLOv8PyFuncModel
 from defect_detection.mlflow_utils import configure_mlflow
 
 
+@dataclass(frozen=True)
+class EvalMetrics:
+    """
+    Minimal evaluation metrics we care about for gating.
+
+    - map50: mAP@0.5 (commonly used quick quality signal)
+    - map50_95: mAP averaged across IoU thresholds 0.5..0.95 (stricter metric)
+    """
+
+    map50: float | None
+    map50_95: float | None
+
+
 def _load_yaml(path: str | Path) -> dict:
     """Load a YAML file into a dict."""
     p = Path(path)
     return yaml.safe_load(p.read_text()) or {}
+
+
+def _extract_eval_metrics(result: Any) -> EvalMetrics:
+    """
+    Best-effort extraction of mAP metrics from Ultralytics validation results.
+
+    Ultralytics result objects have changed across versions; this code tries
+    multiple locations and returns None values when metrics are not found.
+    """
+
+    map50 = None
+    map50_95 = None
+
+    results_dict = getattr(result, "results_dict", None)
+    if isinstance(results_dict, dict):
+        for key in ("metrics/mAP50(B)", "metrics/mAP50", "map50"):
+            v = results_dict.get(key)
+            if isinstance(v, (int, float)):
+                map50 = float(v)
+                break
+        for key in ("metrics/mAP50-95(B)", "metrics/mAP50-95", "map"):
+            v = results_dict.get(key)
+            if isinstance(v, (int, float)):
+                map50_95 = float(v)
+                break
+
+    box = getattr(result, "box", None)
+    if box is not None:
+        v = getattr(box, "map50", None)
+        if isinstance(v, (int, float)):
+            map50 = float(v)
+        v = getattr(box, "map", None)
+        if isinstance(v, (int, float)):
+            map50_95 = float(v)
+
+    return EvalMetrics(map50=map50, map50_95=map50_95)
+
+
+def _get_production_map50(client: MlflowClient, model_name: str) -> float | None:
+    """
+    Read the current Production model's map50 from the registry (if present).
+
+    We store map50 as a model version tag so we can compare champion vs challenger
+    without having to query run metrics in a specific experiment.
+    """
+
+    versions = client.get_latest_versions(model_name, stages=["Production"])
+    if not versions:
+        return None
+    tag = versions[0].tags.get("val_map50")
+    try:
+        return float(tag) if tag is not None else None
+    except Exception:
+        return None
 
 
 def main() -> None:
@@ -35,6 +110,9 @@ def main() -> None:
     parser.add_argument("--data", default=None)
     parser.add_argument("--experiment", default=os.getenv("MLFLOW_EXPERIMENT_NAME", "defect-detection"))
     parser.add_argument("--register-name", default=os.getenv("MLFLOW_MODEL_NAME"))
+    parser.add_argument("--min-map50", type=float, default=float(os.getenv("MIN_MAP50", "0.85")))
+    parser.add_argument("--enforce-gate", action="store_true", default=os.getenv("ENFORCE_GATE", "0") == "1")
+    parser.add_argument("--promote", action="store_true", default=os.getenv("PROMOTE_MODEL", "1") == "1")
     args = parser.parse_args()
 
     params = _load_yaml(args.params)
@@ -80,6 +158,13 @@ def main() -> None:
         if not best_weights.exists():
             raise SystemExit(f"Expected weights not found at {best_weights}")
 
+        # Evaluate the trained weights. This is the key step that enables gating.
+        # If your dataset YAML has a val split with labels, YOLO will compute mAP.
+        evaluator = YOLO(str(best_weights))
+        val_result = evaluator.val(data=data_yaml, verbose=False)
+        val_metrics = _extract_eval_metrics(val_result)
+        mlflow.log_metrics({k: v for k, v in asdict(val_metrics).items() if isinstance(v, (int, float))})
+
         # Log weights file for debugging/inspection or direct weights-based serving.
         mlflow.log_artifact(str(best_weights), artifact_path="artifacts/weights")
 
@@ -98,7 +183,37 @@ def main() -> None:
         )
 
         if args.register_name:
-            mlflow.register_model(model_uri=f"runs:/{run.info.run_id}/model", name=args.register_name)
+            # Register the model so it becomes addressable as models:/name/<stage>.
+            client = MlflowClient()
+            registered = mlflow.register_model(model_uri=f"runs:/{run.info.run_id}/model", name=args.register_name)
+
+            # Store evaluation metrics on the model version for easy retrieval later.
+            if val_metrics.map50 is not None:
+                client.set_model_version_tag(args.register_name, registered.version, "val_map50", str(val_metrics.map50))
+            if val_metrics.map50_95 is not None:
+                client.set_model_version_tag(
+                    args.register_name, registered.version, "val_map50_95", str(val_metrics.map50_95)
+                )
+
+            # Gate logic:
+            # - If enforce-gate is on: fail the run if we cannot compute map50 or it's below threshold.
+            # - If promote is off: stop after registering (no stage transition).
+            if args.enforce_gate:
+                if val_metrics.map50 is None:
+                    raise SystemExit("Evaluation gate enabled but map50 could not be extracted")
+                if val_metrics.map50 < args.min_map50:
+                    raise SystemExit(f"Evaluation gate failed: map50 {val_metrics.map50:.4f} < {args.min_map50:.4f}")
+
+            if args.promote:
+                prod_map50 = _get_production_map50(client, args.register_name)
+                should_promote = prod_map50 is None or val_metrics.map50 is None or val_metrics.map50 > prod_map50
+                if should_promote:
+                    client.transition_model_version_stage(
+                        name=args.register_name,
+                        version=registered.version,
+                        stage="Production",
+                        archive_existing_versions=True,
+                    )
 
 
 if __name__ == "__main__":
